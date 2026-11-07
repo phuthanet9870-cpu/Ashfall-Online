@@ -1,0 +1,22 @@
+PIXEL FANTASY TERRAIN PACK 2 - LICENSE
+==========================================
+
+Copyright (c) 2026. All rights reserved by Laphkal.
+
+PERMITTED
+---------
+- Free to use in commercial and non-commercial games and projects.
+- You may modify, resize, recolor, and adapt the tiles for your game.
+
+REQUIRED
+--------
+- Credit the pack creator in your game's credits
+  (e.g. "Terrain: Pixel Fantasy Terrain Pack 2 by Laphkal").
+
+NOT PERMITTED
+-------------
+- Do NOT redistribute, resell, or re-upload the pack itself (in whole or in
+  part) as a standalone asset pack, on any marketplace or website.
+- Do NOT claim the tiles as your own work.
+
+The pack owner may change these terms at any time for future versions.
