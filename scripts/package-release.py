@@ -8,7 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--ws', default='wss://ashfall-online.phuthanet9870.workers.dev/ws')
 p.add_argument('--out', type=Path, default=ROOT / 'dist')
+p.add_argument('--verified-run-url', help='Successful production verification run, after checking its outcome')
 a = p.parse_args()
+if a.verified_run_url and not re.fullmatch(r'https://github\.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/[0-9]+', a.verified_run_url):
+    p.error('--verified-run-url must reference this repository production verification run')
 u = urlparse(a.ws)
 if u.scheme not in ('ws', 'wss') or not u.hostname or u.username or u.password or u.fragment:
     p.error('--ws must be a WebSocket URL without embedded credentials')
@@ -60,9 +63,9 @@ with zipfile.ZipFile(source, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
     z.writestr('UPLOAD-ITCH-TH.txt', (ROOT / 'docs/UPLOAD-ITCH-TH.txt').read_text())
 readme = (ROOT / 'docs/UPLOAD-ITCH-TH.txt').read_text()
 (a.out / 'UPLOAD-ITCH-TH.txt').write_text(readme)
-manifest = {'protocol': {'onlineAuthority': 2}, 'websocket': a.ws, 'productionBackendVerified': False,
+manifest = {'protocol': {'onlineAuthority': 2}, 'websocket': a.ws, 'productionBackendVerified': bool(a.verified_run_url), 'verificationRunURL': a.verified_run_url,
             'baseCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip(),
-            'includesWorkingTreeChanges': True, 'artifacts': {}}
+            'includesWorkingTreeChanges': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT).strip()), 'artifacts': {}}
 for f in (frontend, worker, source):
     with zipfile.ZipFile(f) as z:
         assert z.testzip() is None

@@ -1,5 +1,11 @@
 Ashfall Online — ชุดสำหรับ itch.io
 
+สถานะวันที่ 9 พฤศจิกายน 2026: ติดตั้ง backend บน Cloudflare แล้ว
+ตรวจ HTTPS /health และ WebSocket onlineAuthority=2 ผ่านบนระบบจริง:
+https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42581317096
+สำหรับ ZIP หน้าเกมรุ่นนี้ ให้ทำข้อ 2 ได้เลย ไม่ต้องติดตั้ง backend ซ้ำ
+ข้อ 1 เก็บไว้สำหรับผู้ดูแลเมื่อต้องย้ายหรือติดตั้งเซิร์ฟเวอร์ใหม่
+
 1. ติดตั้ง backend ให้ตรงรุ่นก่อนเปิดให้ผู้เล่นเข้า
    แตก ashfall-worker.zip ลงเครื่องที่มี Node.js 20 ขึ้นไป แล้วรัน:
      npm ci
@@ -32,9 +38,10 @@ ALLOW_LEGACY_IMPORT เปิดโดยปริยาย เมื่อย�
 การล้างข้อมูลเบราว์เซอร์อาจทำให้ guest กู้คืนไม่ได้ ควรสมัครบัญชีก่อนเล่นจริง
 หากเบราว์เซอร์บล็อก storage ใน iframe ยังเล่นด้วยบัญชีได้ แต่ต้องล็อกอินใหม่เมื่อเปิดหน้าเกมอีกครั้ง
 
-ชุดนี้ผ่านการทดสอบในเครื่องพัฒนา ยังไม่ได้ deploy backend จริงจากเซสชันนี้
+ชุดนี้ผ่าน 38 เทสต์และการทดสอบ iframe ในเครื่องพัฒนา พร้อม deploy และตรวจ backend จริงแล้ว
+การตรวจ production รอบนี้ตรวจ HTTPS และ WebSocket ไม่ใช่การรับรองโหลดระยะยาว
 ZIP หน้าเว็บอย่างเดียวไม่สามารถรัน WebSocket server บน itch.io ได้
-หาก backend ยังเป็นรุ่นเก่า เกมจะยังเข้าโลกออนไลน์รุ่นใหม่นี้ไม่ได้
+เมื่ออัปเดตครั้งต่อไป ต้องติดตั้ง backend และ frontend รุ่นที่เข้ากันได้
 
 โค้ดครบรวม frontend/backend/tests/workflows อยู่ใน ashfall-source.zip
 Node server ทางเลือก: แตก source, npm ci, npm start (พอร์ต 8080)
