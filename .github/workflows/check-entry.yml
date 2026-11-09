@@ -14,4 +14,29 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Read backend authority errors
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          timeout 25s npx wrangler tail --format json > /tmp/ashfall-errors.json 2>/tmp/ashfall-tail-error.txt &
+          tail_pid=$!
+          sleep 3
+          node .github/scripts/check-entry.mjs || true
+          wait "$tail_pid" || true
+          python3 - <<'PYLOG'
+          import json
+          from pathlib import Path
+          s=Path('/tmp/ashfall-errors.json').read_text();decoder=json.JSONDecoder();seen=set()
+          while s.strip():
+              s=s.lstrip()
+              try: record,end=decoder.raw_decode(s)
+              except ValueError: break
+              s=s[end:]
+              for log in record.get('logs',[]):
+                  parts=log.get('message',[])
+                  text=' '.join(map(str,parts))
+                  if ('Online authority' in text or 'Message handler failed' in text) and text not in seen:
+                      seen.add(text);print('::notice title=Backend error::'+text[:1000])
+          PYLOG
       - run: node .github/scripts/check-entry.mjs
