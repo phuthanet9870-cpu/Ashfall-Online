@@ -18,6 +18,45 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
   const channels = new Map();          // "room#n" → { room, n, members:Set, dirty:Set, gone:[] }
   const online = new Map();            // pid → client
   const pcache = new Map(), gcache = new Map(); let gidx = null; let seq = 0;
+  // Server-mediated player interactions. A player may have only one active session.
+  const invitations = new Map(), sessions = new Map(), activeFor = new Map();
+  const LIMIT_MS = 30000;
+  const samePlace = (a, b) => !!(a && b && a.lp && b.lp && a.lp.srv && a.lp.map &&
+    a.lp.srv === b.lp.srv && a.lp.map === b.lp.map);
+  const sendBoth = (session, event) => {
+    toPid(session.a, event); toPid(session.b, event);
+  };
+  const mySide = (session, pid) => pid === session.a ? 'a' : pid === session.b ? 'b' : '';
+  const sessionFor = (c, id) => {
+    const session = sessions.get(String(id || ''));
+    return session && c.pid && mySide(session, c.pid) ? session : null;
+  };
+  const endSession = (session, reason) => {
+    sessions.delete(session.id); activeFor.delete(session.a); activeFor.delete(session.b);
+    sendBoth(session, { t: 'interaction_end', id: session.id, kind: session.kind, reason });
+  };
+  const tradeView = (session) => ({
+    t: 'trade_state', id: session.id, offers: session.offers,
+    locked: session.locked, confirmed: session.confirmed
+  });
+  const safeOffer = (value) => {
+    const gold = Number(value && value.gold);
+    if (!Number.isSafeInteger(gold) || gold < 0 || gold > 1000000000000) return null;
+    if (!Array.isArray(value.items) || value.items.length > 8) return null;
+    if (JSON.stringify(value.items).length > 15000) return null;
+    const ids = new Set(), items = [];
+    for (const source of value.items) {
+      if (!source || typeof source !== 'object' || Array.isArray(source) ||
+          typeof source.uid !== 'string' || source.uid.length > 64 || ids.has(source.uid) ||
+          !['gear','acc','relic','rune','gem','fashion'].includes(source.kind) ||
+          source.lock) return null;
+      ids.add(source.uid);
+      const item = JSON.parse(JSON.stringify(source));
+      if (JSON.stringify(item).length > 4000) return null;
+      items.push(item);
+    }
+    return { gold, items };
+  };
   // ---------- storage helpers ----------
   const getP = async pid => { if (pcache.has(pid)) return pcache.get(pid); const r = (await storage.get('p:' + pid)) || null; if (r) pcache.set(pid, r); return r; };
   const putP = (r) => { pcache.set(r.pid, r); return storage.put('p:' + r.pid, r); };
@@ -55,8 +94,126 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
       if (!r) r = { pid, kh, friends: [], inc: [], guild: null, created: Date.now() };
       r.name = cleanName(m.name) || 'ผู้เล่น'; r.cls = clamp(m.cls, 20); r.lv = Math.max(1, Math.min(999, m.lv | 0)); r.last = Date.now(); await putP(r);
       const first = c.pid !== pid; if (c.pid && c.pid !== pid && online.get(c.pid) === c) online.delete(c.pid); c.pid = pid; const prev = online.get(pid); if (prev && prev !== c) { send(prev, { t: 'kicked', why: 'login elsewhere' }); prev.pid = null; } online.set(pid, c);
-      if (first) { send(c, { t: 'me', pid }); send(c, await friendList(r)); const g = await getG(r.guild); if (g && g.members.some(x => x.pid === pid)) send(c, { t: 'g_info', guild: await guildView(g, pid) }); else if (r.guild) { r.guild = null; await putP(r); send(c, { t: 'g_info', guild: null }); }
+      if (first) { send(c, { t: 'me', pid }); send(c, await friendList(r));
+        for (const receipt of (await storage.get('trade_pending:'+pid)) || []) send(c,{t:'trade_receipt',receipt}); const g = await getG(r.guild); if (g && g.members.some(x => x.pid === pid)) send(c, { t: 'g_info', guild: await guildView(g, pid) }); else if (r.guild) { r.guild = null; await putP(r); send(c, { t: 'g_info', guild: null }); }
         for (const f of r.friends) pushFriends(f); } },
+    // Requests reach the other REAL player, who must explicitly accept or reject.
+    async interact_req(c, m) {
+      if (!c.pid) return;
+      const to = String(m.to || ''), kind = String(m.kind || '');
+      const other = online.get(to);
+      if (!['trade','duel'].includes(kind) || !other || to === c.pid ||
+          !samePlace(c, other) || activeFor.has(c.pid) || activeFor.has(to)) {
+        return send(c, { t: 'note', msg: 'ไม่สามารถส่งคำขอได้ ต้องออนไลน์ในเซิร์ฟเวอร์และแมพเดียวกัน และไม่ได้ทำรายการอื่นอยู่' });
+      }
+      if (kind === 'trade' && !/^aurelion|^town|^capital|^city/i.test(c.lp.map)) {
+        // Other towns are permitted by the client UI, but server never accepts a cross-map offer.
+      }
+      if ([...invitations.values()].some(x => x.from === c.pid || x.to === c.pid)) {
+        return send(c, { t: 'note', msg: 'มีคำขอที่กำลังรอคำตอบอยู่แล้ว' });
+      }
+      const id = 'r' + Date.now().toString(36) + (seq++).toString(36);
+      const entry = { id, from: c.pid, to, kind, until: Date.now() + LIMIT_MS };
+      invitations.set(id, entry);
+      const from = await getP(c.pid);
+      send(other, { t: 'interaction_request', id, kind, from: card(from), expires: entry.until });
+      send(c, { t: 'interaction_pending', id, kind, to, name: (await getP(to))?.name || 'ผู้เล่น' });
+    },
+    async interact_reply(c, m) {
+      const request = invitations.get(String(m.id || ''));
+      if (!request || request.to !== c.pid) return;
+      invitations.delete(request.id);
+      if (Date.now() > request.until || !m.accept) {
+        toPid(request.from, { t: 'interaction_rejected', id: request.id, reason: m.accept ? 'คำขอหมดเวลา' : 'อีกฝ่ายปฏิเสธคำขอ' });
+        return;
+      }
+      const from = online.get(request.from);
+      if (!from || !samePlace(from, c) || activeFor.has(request.from) || activeFor.has(c.pid)) {
+        return send(c, { t: 'note', msg: 'ผู้เล่นไม่อยู่ในพื้นที่เดียวกันหรือกำลังทำรายการอื่น' });
+      }
+      const id = 's' + Date.now().toString(36) + (seq++).toString(36);
+      const session = { id, kind: request.kind, a: request.from, b: request.to,
+        created: Date.now(), offers: { a: { gold: 0, items: [] }, b: { gold: 0, items: [] } },
+        locked: { a: false, b: false }, confirmed: { a: false, b: false },
+        health: { a: 100, b: 100 }, lastHit: { a: 0, b: 0 } };
+      sessions.set(id, session); activeFor.set(session.a,id); activeFor.set(session.b,id);
+      for (const pid of [session.a,session.b]) {
+        const otherPid = pid === session.a ? session.b : session.a;
+        const player = await getP(otherPid);
+        toPid(pid, { t: 'interaction_open', id, kind: session.kind, other: card(player),
+          side: mySide(session,pid) });
+      }
+      if (session.kind === 'trade') sendBoth(session,tradeView(session));
+      else sendBoth(session,{ t:'duel_state', id, health:session.health, live:true });
+    },
+    async interact_offer(c,m) {
+      const session = sessionFor(c,m.id);
+      if (!session || session.kind !== 'trade') return;
+      const side = mySide(session,c.pid), offer = safeOffer(m.offer);
+      if (!offer) return send(c,{t:'note',msg:'ข้อเสนอไม่ถูกต้อง (สูงสุด 8 ไอเทม)'});
+      session.offers[side]=offer;session.locked={a:false,b:false};
+      session.confirmed={a:false,b:false};sendBoth(session,tradeView(session));
+    },
+    interact_lock(c,m) {
+      const session=sessionFor(c,m.id);if(!session||session.kind!=='trade')return;
+      const side=mySide(session,c.pid);session.locked[side]=!!m.lock;
+      session.confirmed={a:false,b:false};sendBoth(session,tradeView(session));
+    },
+    async interact_confirm(c,m) {
+      const session=sessionFor(c,m.id);if(!session||session.kind!=='trade')return;
+      if(!session.locked.a||!session.locked.b)return;
+      session.confirmed[mySide(session,c.pid)]=!!m.confirm;
+      sendBoth(session,tradeView(session));
+      if(!session.confirmed.a||!session.confirmed.b)return;
+      if(!session.offers.a.items.length&&!session.offers.a.gold&&
+         !session.offers.b.items.length&&!session.offers.b.gold) {
+        return endSession(session,'empty');
+      }
+      // Durable receipts allow reconnects to recover a completed exchange. The current
+      // client-local economy still needs separate authoritative inventory migration.
+      for (const pid of [session.a,session.b]) {
+        const mine=mySide(session,pid), theirs=mine==='a'?'b':'a';
+        const receipt={id:session.id,give:session.offers[mine],take:session.offers[theirs],
+          with:(await getP(pid===session.a?session.b:session.a))?.name||'ผู้เล่น',at:Date.now()};
+        const key='trade_pending:'+pid;
+        const previous=(await storage.get(key))||[];
+        if(!previous.some(x=>x.id===receipt.id)) await storage.put(key,[...previous,receipt].slice(-20));
+        toPid(pid,{t:'trade_receipt',receipt});
+      }
+      endSession(session,'completed');
+    },
+    async trade_ack(c,m) {
+      if(!c.pid)return;
+      const key='trade_pending:'+c.pid;
+      const previous=(await storage.get(key))||[];
+      const next=previous.filter(x=>x.id!==String(m.id||''));
+      if(next.length!==previous.length)await storage.put(key,next);
+    },
+    interact_cancel(c,m) {
+      const request=invitations.get(String(m.id||''));
+      if(request && (request.to===c.pid||request.from===c.pid)){
+        invitations.delete(request.id);
+        toPid(request.from,{t:'interaction_rejected',id:request.id,reason:'ยกเลิกคำขอแล้ว'});
+        toPid(request.to,{t:'interaction_rejected',id:request.id,reason:'ยกเลิกคำขอแล้ว'});
+      }
+      const session=sessionFor(c,m.id);if(session)endSession(session,'cancelled');
+    },
+    duel_hit(c,m) {
+      const session=sessionFor(c,m.id);if(!session||session.kind!=='duel')return;
+      const from=online.get(session.a),to=online.get(session.b);
+      if(!from||!to||!samePlace(from,to))return endSession(session,'left');
+      const side=mySide(session,c.pid),other=side==='a'?'b':'a',now=Date.now();
+      if(now-session.lastHit[side]<100)return;
+      const damage=Number(m.damage);
+      if(!Number.isFinite(damage)||damage<=0)return;
+      session.lastHit[side]=now;
+      session.health[other]=Math.max(0,session.health[other]-Math.min(8,damage));
+      sendBoth(session,{t:'duel_state',id:session.id,health:session.health,live:true});
+      if(session.health[other]<=10){
+        sendBoth(session,{t:'duel_result',id:session.id,winner:c.pid,loser:other==='a'?session.a:session.b});
+        endSession(session,'knockout');
+      }
+    },
     // friends
     async fr_req(c, m) { if (!c.pid) return; const to = String(m.to || ''); if (!PID.test(to) || to === c.pid) return; const r = await getP(c.pid), t = await getP(to); if (!t) return send(c, { t: 'note', msg: 'ไม่พบผู้เล่น' });
       if (r.friends.includes(to)) return send(c, { t: 'note', msg: 'เป็นเพื่อนกันอยู่แล้ว' }); if (r.friends.length >= maxFriends) return send(c, { t: 'note', msg: 'รายชื่อเพื่อนเต็มแล้ว' });
@@ -96,10 +253,14 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
   return {
     connect(sock) { const c = { id: Math.random().toString(16).slice(2, 14), sock, pid: null, lp: null, rooms: new Map(), rp: new Map(), rps: new Map(), budget: 40 }; clients.add(c); send(c, { t: 'hi', id: c.id }); return c; },
     async message(c, data) { if (--c.budget < 0) return; let m; try { m = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)); } catch (e) { return; } if (!m || typeof m !== 'object' || typeof m.t !== 'string') return; const h = H[m.t]; if (!h) return; try { await h(c, m); } catch (e) { send(c, { t: 'note', msg: 'เซิร์ฟเวอร์ผิดพลาด ลองใหม่' }); } },
-    disconnect(c) { for (const room of [...c.rooms.keys()]) leaveRoom(c, room); clients.delete(c); if (c.pid && online.get(c.pid) === c) { online.delete(c.pid); getP(c.pid).then(r => { if (r) { r.last = Date.now(); putP(r); for (const f of r.friends) pushFriends(f); if (r.guild) getG(r.guild).then(g => g && pushGuild(g)); } }); } },
+    disconnect(c) { if(c.pid && activeFor.has(c.pid)){const session=sessions.get(activeFor.get(c.pid));if(session)endSession(session,'disconnected');}
+      for(const [id,request] of invitations) if(request.from===c.pid||request.to===c.pid) {
+        invitations.delete(id);toPid(request.from,{t:'interaction_rejected',id,reason:'อีกฝ่ายออกจากเกม'});toPid(request.to,{t:'interaction_rejected',id,reason:'อีกฝ่ายออกจากเกม'});
+      }
+      for (const room of [...c.rooms.keys()]) leaveRoom(c, room); clients.delete(c); if (c.pid && online.get(c.pid) === c) { online.delete(c.pid); getP(c.pid).then(r => { if (r) { r.last = Date.now(); putP(r); for (const f of r.friends) pushFriends(f); if (r.guild) getG(r.guild).then(g => g && pushGuild(g)); } }); } },
     tickFast() { for (const c of clients) c.budget = Math.min(40, c.budget + 2);
       for (const ch of channels.values()) { if (!ch.dirty.size && !ch.gone.length) continue; const msg = JSON.stringify({ t: 'pd', room: ch.room, upd: [...ch.dirty].map(m => ({ peer: m.id, presence: m.rp.get(ch.room) })), gone: ch.gone }); ch.dirty.clear(); ch.gone = []; for (const m of ch.members) send(m, msg); } },
-    tickLobby() { const by = {}, counts = {}; for (const c of clients) { const p = c.lp; if (!p || !p.srv) continue; const s = clamp(p.srv, 8); counts[s] = (counts[s] || 0) + 1; (by[s] = by[s] || []).push(c); }
+    tickLobby() { for(const [id,request] of invitations) if(Date.now()>request.until){invitations.delete(id);toPid(request.from,{t:'interaction_rejected',id,reason:'คำขอหมดเวลา'});} const by = {}, counts = {}; for (const c of clients) { const p = c.lp; if (!p || !p.srv) continue; const s = clamp(p.srv, 8); counts[s] = (counts[s] || 0) + 1; (by[s] = by[s] || []).push(c); }
       const peers = []; for (const s in by) { by[s].sort((a, b) => (b.lp.lv || 0) - (a.lp.lv || 0)); for (const c of by[s].slice(0, lobbyPer)) peers.push({ peer: c.id, presence: { ...c.lp, pid: c.pid || '' } }); }
       const msg = JSON.stringify({ t: 'lobby', peers, counts }); for (const c of clients) send(c, msg); },
     stats() { return { clients: clients.size, players: online.size, channels: channels.size }; }
