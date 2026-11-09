@@ -9,6 +9,8 @@ export class World {
   startTimers() { if (this.timers) return; this.timers = true; this.f = setInterval(() => this.core.tickFast(), 50); this.l = setInterval(() => this.core.tickLobby(), 3000); }
   stopTimersIfIdle() { if (this.core.stats().clients) return; clearInterval(this.f); clearInterval(this.l); this.timers = false; }
   async fetch(req) {
+    // Drain durable writes before evicting an actor retained from an older deployment.
+    if(this.core.stats().release!==BUILD_RELEASE&&typeof this.ctx.abort==='function'){await this.core.flush?.();this.ctx.abort('Loading updated Ashfall build');return new Response('Updating game server',{status:503});}
     const url = new URL(req.url); if (url.pathname === '/health') return Response.json({ ok: true, ...this.core.stats() });
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
     const [client, server] = Object.values(new WebSocketPair()); server.accept(); this.startTimers();

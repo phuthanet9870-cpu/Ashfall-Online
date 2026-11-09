@@ -19,6 +19,7 @@
   if(trade.status==='open'){invitation=null;UI.closeModal();project();if(UI.panel?.id!=='trade')UI.openPanel('trade','deal');else render();return;}
   const completed=trade.status==='complete',name=trade.names?.[1-trade.me]||UI.trade?.T?.name||'ผู้เล่น';trade=null;invitation=null;UI.onlineTrade=null;UI.trade=null;UI.closeModal();UI.toast(completed?`เทรดกับ ${name} สำเร็จ`:'ยกเลิกการเทรดแล้ว',completed?'good':'info');if(UI.panel?.id==='trade'){UI.panel.tab=completed?'hist':'near';UI.renderPanel();}
  });
+ NET.on('close',()=>{if(invitation)UI.closeModal();if(UI.trade?.online&&UI.panel?.id==='trade')UI.closePanel();trade=null;invitation=null;UI.trade=null;UI.onlineTrade=null;queue=Promise.resolve();});
  NET.on('online_character',()=>{if(trade?.status==='open'){project();render();}});
  const command=(t,change)=>{const expected=trade?.id;queue=queue.catch(()=>{}).then(async()=>{if(!trade||trade.id!==expected||trade.status!=='open')return;const extra=change?change(trade.offers[trade.me]):{};if(extra===null)return;return NET.request({t,trade:trade.id,version:trade.version,...extra});}).catch(e=>UI.toast(e.message,'bad'));return queue;};
  UI.onlineTradeAfter=()=>{const input=document.getElementById('tgme');if(input)input.onchange=()=>{const gold=Math.max(0,Math.min(S.save.gold,Math.floor(Number(input.value)||0)));command('online_trade_offer',offer=>({items:[...offer.items],gold}));};};
