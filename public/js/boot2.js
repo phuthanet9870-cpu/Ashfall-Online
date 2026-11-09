@@ -68,7 +68,7 @@
   const st0 = UI.showTitle; UI.showTitle = function () { if (!G.ACC) { cover(); return; } hide(); const r = st0.apply(this, arguments); const h = document.querySelector('#title-screen .rohead'); if (h && !h.querySelector('.b2acct')) h.insertAdjacentHTML('beforeend', `<span class="b2acct">${G.ACC.how === 'guest' ? '👤' : G.ACC.how === 'google' ? 'G' : '🔑'} ${esc(G.ACC.name)} · ${esc((SERVERS.find(s => s[0] === srv()) || SERVERS[0])[1])}</span><button class="btn" data-act="b2-logout">ออกจากระบบ</button>`); return r; };
   const a0 = UI.act; UI.act = (el, e) => { if (el.dataset.act === 'b2-logout') { window.ASHFALL_NET?.send({t:'account_logout'}); globalThis.ASHFALL_STORAGE.removeItem('ashfall_session'); if(window.ASHFALL_NET)window.ASHFALL_NET.sessionToken=''; try { S.save && S.persist(); } catch (er) { } S.save = null; G.ACC = null; S.useSlots && S.useSlots(null); show(); login(); return; } return a0(el, e); };
   const gt0 = S.goTown; S.goTown = function () { hide(); return gt0.apply(this, arguments); };
-  setInterval(() => { if (!root.hidden && G.W && G.W.player && G.W.mode) hide(); }, 400);
+  setInterval(() => { if (!root.hidden && !window.ASHFALL_NET?.signedOut && G.W && G.W.player && G.W.mode) hide(); }, 400);
   G.BOOT = { enter: (name = 'tester') => { G.ACC = { id: norm(name), name, how: 'acc', server: srv() }; S.useSlots && S.useSlots(norm(name) + '@' + srv()); hide(); }, cover, login };
   const css = document.createElement('style'); css.textContent = `
   #boot2{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;font-family:Kanit,sans-serif;color:#f2e6c8;background:radial-gradient(ellipse at 50% 30%,#2a2216,#0c0a08 60%,#050404);overflow:hidden;cursor:pointer}#boot2[hidden]{display:none}

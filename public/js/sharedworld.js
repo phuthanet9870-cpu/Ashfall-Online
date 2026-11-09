@@ -28,6 +28,8 @@
     if(NET.features?.onlineAuthority!==2)return;
     if(!SW.ready&&performance.now()>=nextJoin){nextJoin=performance.now()+3000;send({t:'online_enter',request,server,mode:wanted,character:id,legacy:official?undefined:S.save});}
   }
+  NET.on('auth_lost',()=>{SW.ready=false;SW.revision=-1;nextJoin=0;});
+  NET.on('login_required',()=>{SW.ready=false;G.ACC=null;G.BOOT?.login();const root=document.getElementById('boot2');if(root)root.hidden=false;});
   NET.on('close',()=>{SW.ready=false;SW.revision=-1;nextJoin=0;});
   NET.on('kicked',()=>{SW.ready=false;UI.toast('บัญชีนี้เข้าสู่ระบบจากที่อื่นแล้ว','bad');});
   NET.on('account_ok',m=>{if(!W.player&&G.BOOT)G.BOOT.enter(m.username);S.mergeOnlineSlots?.(m.characters);if(!W.player)UI.showTitle();});

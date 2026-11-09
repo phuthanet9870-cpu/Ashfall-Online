@@ -98,7 +98,8 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
       if (!r) r = { pid, kh, friends: [], inc: [], guild: null, created: Date.now() };
       r.name = cleanName(m.name) || 'ผู้เล่น'; r.cls = clamp(m.cls, 20); r.lv = Math.max(1, Math.min(999, m.lv | 0)); r.last = Date.now(); await putP(r);
       const first = c.pid !== pid; if (c.pid && c.pid !== pid && online.get(c.pid) === c) online.delete(c.pid); c.pid = pid; const prev = online.get(pid); if (prev && prev !== c) { send(prev, { t: 'kicked', why: 'login elsewhere' }); prev.pid = null; } online.set(pid, c);
-      if (first) { send(c, { t: 'me', pid }); send(c, await friendList(r));
+      send(c, { t: 'me', pid });
+      if (first) { send(c, await friendList(r));
         for (const receipt of (await storage.get('trade_pending:'+pid)) || []) send(c,{t:'trade_receipt',receipt}); const g = await getG(r.guild); if (g && g.members.some(x => x.pid === pid)) send(c, { t: 'g_info', guild: await guildView(g, pid) }); else if (r.guild) { r.guild = null; await putP(r); send(c, { t: 'g_info', guild: null }); }
         for (const f of r.friends) pushFriends(f); } },
     // Requests reach the other REAL player, who must explicitly accept or reject.

@@ -17,24 +17,35 @@
   const NET = window.ASHFALL_NET = { pid: PID, sessionToken: ls('ashfall_session') || '', connected: false, authed: false, error: '', url: URL_, peerPid: new Map(), on(t, f) { (bus.get(t) || bus.set(t, []).get(t)).push(f); }, send(o) { send(o); }, request(o) { return new Promise((resolve,reject)=>{const request=crypto.randomUUID();const timer=setTimeout(()=>{requests.delete(request);reject(new Error('request_timeout'));},20000);requests.set(request,{resolve,reject,timer});send({...o,request});}); } };
   let ws = null, myId = null, retry = 1000, authStr = '';
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
-  const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut) return; if (NET.sessionToken) { if (NET.authed && !force) return; send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; send(a); };
+  const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut || NET.authPending) return; if (NET.sessionToken) { if (NET.authed && !force) return; NET.authPending=true;send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; NET.authPending=true;send(a); };
   setInterval(() => auth(false), 2000);
   const makeRoom = () => {
     let connected = false, lastLobby = null, lobbyStr = '', lobbyT = 0;
     const connCbs = [], peerCbs = [], lobby = new Map(), subs = new Map();
     const asPeers = (map) => [...map].map(([peer, presence]) => ({ peer, presence, kind: 'viewer', isMe: peer === myId }));
     const connect = () => { try { ws = new WebSocket(URL_); NET.error = ''; } catch (e) { NET.error = 'WebSocket URL ไม่ถูกต้อง: ' + (e.message || e); console.error('[Ashfall Online] WebSocket URL:', URL_, e); setTimeout(connect, retry); return; }
-      ws.onopen = () => { NET.error = ''; connected = NET.connected = true; retry = 1000; authStr = ''; auth(true); connCbs.forEach(f => { try { f(true); } catch (e) { } }); if (lastLobby) send({ t: 'lp', d: lastLobby }); for (const s of subs.values()) { s.last = ''; send({ t: 'join', room: s.name }); } emit('open', {}); };
-      ws.onclose = (event) => { NET.error = 'การเชื่อมต่อถูกปิด (code ' + event.code + ')'; const was = connected; connected = NET.connected = NET.authed = false; if (was) { connCbs.forEach(f => { try { f(false); } catch (e) { } }); emit('close', {}); } setTimeout(connect, retry + Math.random() * 1000); retry = Math.min(15000, retry * 1.6); };
+      ws.onopen = () => { NET.authPending=false; NET.error = ''; connected = NET.connected = true; retry = 1000; authStr = ''; auth(true); connCbs.forEach(f => { try { f(true); } catch (e) { } }); if (lastLobby) send({ t: 'lp', d: lastLobby }); for (const s of subs.values()) { s.last = ''; send({ t: 'join', room: s.name }); } emit('open', {}); };
+      ws.onclose = (event) => { NET.authPending=false; NET.error = 'การเชื่อมต่อถูกปิด (code ' + event.code + ')'; const was = connected; connected = NET.connected = NET.authed = false; if (was) { connCbs.forEach(f => { try { f(false); } catch (e) { } }); emit('close', {}); } setTimeout(connect, retry + Math.random() * 1000); retry = Math.min(15000, retry * 1.6); };
       ws.onerror = (event) => { NET.error = 'เชื่อมต่อ WebSocket ไม่สำเร็จ ตรวจ URL และ Cloudflare Worker'; console.error('[Ashfall Online] WebSocket error:', URL_, event); };
       ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (er) { return; }
         if (m.request && requests.has(m.request)) { const p=requests.get(m.request);clearTimeout(p.timer);requests.delete(m.request);if(m.t==='online_error')p.reject(new Error(m.error));else p.resolve(m); }
-        if (m.t === 'account_ok') { PID = NET.pid = m.pid; NET.sessionToken=m.token;ls('ashfall_session',m.token);NET.authed=true;NET.signedOut=false; }
+        if (m.t === 'account_ok') { NET.authPending=false; PID = NET.pid = m.pid; NET.sessionToken=m.token;ls('ashfall_session',m.token);NET.authed=true;NET.signedOut=false; }
         if (m.t === 'account_logged_out') { NET.sessionToken='';ls('ashfall_session','');PID=NET.pid=guestPID=rnd(8);KEY=rnd(16);ls('ashfall_pid',PID);ls('ashfall_key',KEY);NET.authed=false;NET.signedOut=false; }
-        if (m.t === 'kicked') { NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session',''); }
-        if(m.t==='online_error'&&['session_expired','invalid_session'].includes(m.error)){NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');}
+        if (m.t === 'kicked') { NET.authPending=false;NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');emit('login_required',m); }
+        if(m.t==='online_error'&&['session_expired','invalid_session'].includes(m.error)){NET.authPending=false;NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');emit('login_required',m);}
         if (m.t === 'hi') { myId = m.id; NET.features = m.features || {}; return; }
-        if (m.t === 'me') { NET.authed = true; }
+        if (m.t === 'me') { NET.authPending=false;NET.authed = true; }
+        if(m.t==='auth_fail'){
+          NET.authPending=false;NET.authed=false;authStr='';
+          // A guest identity can remain in browser storage after it was linked to an account.
+          // Never reuse an account-locked guest key or pretend its lobby socket is authenticated.
+          if(!NET.sessionToken&&['account_login_required','key','bad id'].includes(m.why)){
+            PID=NET.pid=guestPID=rnd(8);KEY=rnd(16);ls('ashfall_pid',PID);ls('ashfall_key',KEY);auth(true);
+          }else NET.error='ยืนยันตัวตนไม่สำเร็จ: '+m.why;
+        }
+        if(m.t==='online_error'&&m.error==='auth_required'&&!NET.signedOut){
+          NET.authed=false;NET.authPending=false;authStr='';emit('auth_lost',m);auth(true);
+        }
         if (m.t === 'lobby') { lobby.clear(); for (const p of m.peers || []) { lobby.set(p.peer, p.presence); if (p.presence && p.presence.pid) NET.peerPid.set(p.peer, p.presence.pid); } api.counts = m.counts || {}; peerCbs.forEach(f => { try { f({ peers: api.peers() }); } catch (er) { } }); emit('lobby', m); return; }
         if (m.t === 'snap' || m.t === 'pd') { const s = subs.get(m.room); if (!s) return; if (m.t === 'snap') { s.map.clear(); s.channel = m.ch; NET.channel = m.ch; }
           for (const p of m.upd || []) { s.map.set(p.peer, p.presence); if (p.presence && p.presence.pid) NET.peerPid.set(p.peer, p.presence.pid); } for (const g of m.gone || []) s.map.delete(g); s.cbs.forEach(f => { try { f({ peers: s.peers() }); } catch (er) { } }); return; }

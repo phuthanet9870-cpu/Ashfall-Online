@@ -5,8 +5,18 @@ const assert=require('node:assert/strict');const{chromium}=require('playwright')
  const pages=[],errors=[],url=process.env.ASHFALL_TEST_URL||'http://127.0.0.1:8080',suffix=Date.now().toString(36);
  async function page(){const context=await browser.newContext(),p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));p.on('console',m=>{if(m.type()==='error'&&!m.text().startsWith('Failed to load resource:'))errors.push(m.text());});await p.goto(url);await p.waitForFunction(()=>ASHFALL_NET.connected&&ASHFALL_NET.features?.onlineAuthority===2);return p;}
  try{
+  // Reproduce a legacy guest key locked by account linking after its login token was lost.
+  const locked=await page();await locked.waitForFunction(()=>ASHFALL_NET.authed);
+  const lockedId=await locked.evaluate(async suffix=>{await ASHFALL_NET.request({t:'account_register',username:'locked-'+suffix,password:'smoke-password-123'});const id=ASHFALL_NET.pid;ASHFALL_STORAGE.removeItem('ashfall_session');return id;},suffix);
+  await locked.reload();await locked.waitForFunction(id=>ASHFALL_NET.authed&&ASHFALL_NET.pid!==id,lockedId);await locked.context().close();
   for(let i=0;i<2;i++){const p=await page();pages.push(p);await p.evaluate(async({i,suffix})=>{await ASHFALL_NET.request({t:'account_register',username:'smoke-'+suffix+'-'+i,password:'smoke-password-123'});const{S}=G;S.save=S.newSave('Browser'+i,'ranger');S.save.lvl=17;S.save.gold=10000;const item=S.genItem('gem',1,1);item.uid='browser-'+i+'-'+suffix;S.save.inv.push(item);document.getElementById('boot2').hidden=true;document.getElementById('title-screen').hidden=true;S.goTown('aurelion');window.testStates=new Map();ASHFALL_NET.on('online_state',m=>testStates.set(m.state.revision,JSON.stringify(m.state)));}, {i,suffix});await p.waitForFunction(()=>G.SHARED_WORLD.ready&&G.SHARED_WORLD.characterRevision>0,{timeout:30000});}
   for(const p of pages)await p.waitForFunction(()=>G.W.units.filter(u=>u.pid).length===2&&testStates.size>=2);
+  // Exercise actual ground clicks and assert the other browser receives authoritative movement.
+  const start=await pages[0].evaluate(()=>({x:G.W.player.x,y:G.W.player.y,pid:G.SHARED_WORLD.playerId}));
+  const point=await pages[0].evaluate(()=>{const{W,E}=G,p=W.player;const [sx,sy]=W.cam.w2s(p.x+2,p.y);const r=document.getElementById('cv').getBoundingClientRect();return{x:r.left+sx/E.VW*r.width,y:r.top+sy/E.VH*r.height};});
+  await pages[0].mouse.click(point.x,point.y);
+  await pages[0].waitForFunction(s=>Math.hypot(G.W.player.x-s.x,G.W.player.y-s.y)>1,start);
+  await pages[1].waitForFunction(s=>{const u=G.W.units.find(u=>u.pid===s.pid);return u&&Math.hypot(u.x-s.x,u.y-s.y)>1;},start);
   assert.equal(await pages[0].evaluate(()=>G.S.save.lvl),17);
   await pages[0].evaluate(()=>G.SHARED_WORLD.command('buy',[0,1]));assert.equal(await pages[0].evaluate(()=>G.S.save.gold),9960);
   const target=await pages[1].evaluate(()=>G.SHARED_WORLD.playerId);
