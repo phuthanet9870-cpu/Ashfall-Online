@@ -5,7 +5,7 @@
   const {W,E,S,D,U,UI,VFX:V,SPR}=G;
   const SW=G.SHARED_WORLD={active:false,ready:false,room:'',playerId:'',revision:-1,characterRevision:0};
   const nativeEnter=S.enter,nativePersist=S.persist,nativeRefresh=S.refreshPlayer;
-  let lastSettings='',settingsTimer=null;let wanted=null,request='',currentMap=null,currentCharacter='',nextJoin=0,intent=null,moving=false,lastIntent=0,lastPotion=0,applying=false,official=null,commandChain=Promise.resolve();
+  let lastSettings='',settingsTimer=null,lastCache=0,lastGear='',lastPanel='';let wanted=null,request='',currentMap=null,currentCharacter='',nextJoin=0,intent=null,moving=false,lastIntent=0,lastPotion=0,applying=false,official=null,commandChain=Promise.resolve();
   const entities=new Map(),pickups=new Map(),pending=new Map();
   const send=o=>{if(NET.connected)NET.send(o);};
   function charId(){if(!S.save)return '';if(!S.save._worldCharacter){S.save._worldCharacter=crypto.randomUUID();nativePersist();}return S.save._worldCharacter;}
@@ -38,7 +38,7 @@
     m.walls=g.walls.map(w=>({...w,x:w.tx+.5,y:w.ty+.5,img:SPR.wallBlock(w.color,18)}));
     m.chunks?.clear();E.renderMapCanvas(m);currentMap=m;
   }
-  NET.on('online_ready',m=>{if(!SW.active||m.request!==request||m.character!==currentCharacter)return;SW.room=m.room;SW.channel=m.channel||1;SW._siegePhase=null;SW.playerId=m.playerId;SW.ready=true;SW.revision=-1;SW._effects=new Set();if(m.mode.kind==='pvp')W.mode=S.PvPMode({mode:m.mode.id,map:m.mode.map,size:m.mode.size,diff:1,normalized:m.mode.normalized,mercs:false});geometry(m.geometry);apply(m);});
+  NET.on('online_ready',m=>{if(!SW.active||m.request!==request||m.character!==currentCharacter)return;SW.room=m.room;SW.channel=m.channel||1;SW._siegePhase=null;SW.playerId=m.playerId;SW.ready=true;SW.revision=-1;SW._effects=new Set();SW._predict=false;if(m.mode.kind==='pvp')W.mode=S.PvPMode({mode:m.mode.id,map:m.mode.map,size:m.mode.size,diff:1,normalized:m.mode.normalized,mercs:false});geometry(m.geometry);apply(m);});
   NET.on('online_geometry',m=>{if(SW.ready&&m.room===SW.room)geometry(m.geometry);});
   NET.on('online_state',m=>{if(SW.ready&&m.room===SW.room)apply(m);});
   function apply(m){const state=m.state;if(!state||state.revision<SW.revision)return;SW.revision=state.revision;const seen=new Set();
@@ -49,10 +49,11 @@
       const oldHp=u.hp,oldX=u.x,oldY=u.y;u._worldId=q.id;u._shared=true;seen.add(q.id);entities.set(q.id,u);
       for(const k of Object.keys(q))if(!['id','owner','anim','look','damage'].includes(k))u[k]=q[k];u.id=q.id;u.anim.at=q.anim?.at||0;u.anim.ct=q.anim?.ct||0;
       if(q.pid&&!me){u.online=q.pid.split(':')[0];NET.peerPid.set(u.online,u.online);}
+      if(me){u._authX=q.x;u._authY=q.y;if(SW._predict&&oldHp>0&&!q.dead&&U.d2(oldX,oldY,q.x,q.y)<36){u.x=oldX;u.y=oldY;}SW._predict=true;}
       if(!me){u._tx=q.x;u._ty=q.y;if(U.d2(oldX,oldY,q.x,q.y)<64){u.x=oldX;u.y=oldY;}}
       if(q.kind==='struct'&&q.sub!=='turret'&&!u.propSpr)u.propSpr=SPR.prop(q.sub==='tower'?'tower':'portal',{c:q.team?'#aa4444':'#4488aa'});
       if(oldHp>q.hp&&!q.dead&&E.vis(q.x,q.y)){u.flash=.1;V.text(q.x,q.y,U.fmt(oldHp-q.hp),me?'#ff5a5a':'#ffffff',{size:8});}
-      if(me&&m.self){u.st=m.self.st;u.cds=Float32Array.from(m.self.cds);u.gcd=m.self.gcd;u.runes=m.self.runes;u.sets=m.self.sets;}
+      if(me&&m.self){if(m.self.gm)Object.assign(W.gm,m.self.gm,m.self.gmFlags);u.st=m.self.st;u.cds=Float32Array.from(m.self.cds);u.gcd=m.self.gcd;u.runes=m.self.runes;u.sets=m.self.sets;}
     }
     for(const id of entities.keys())if(!seen.has(id))entities.delete(id);W.units=[...entities.values()];
     for(const q of SW._unitStates.values())if(q.damage){const unit=entities.get(q.id);unit.wbDmg=new Map(q.damage.map(([id,n])=>[entities.get(id),n]).filter(([u])=>u));}
@@ -74,7 +75,13 @@
   NET.on('online_character',m=>{if(m.character!==currentCharacter||!S.save)return;
     try{if(!official&&S.save._worldCharacter){const key='ashfall_legacy_backup_'+S.save._worldCharacter;if(!globalThis.ASHFALL_STORAGE.getItem(key))globalThis.ASHFALL_STORAGE.setItem(key,JSON.stringify(S.save));}}catch{}
     const settings={...S.save.settings};official=structuredClone(m.save);UI.market=structuredClone(m.save._onlineMarket?.items||[]);SW.characterRevision=m.revision;applying=true;
-    try{S.save=structuredClone(m.save);S.save.settings={...S.save.settings,...settings};nativePersist();if(W.player){W.player.cls=S.save.cls;W.player.look=S.lookPlayer();S.applyFlags(W.player,{...S.calcPlayer()});}UI.refreshHud?.(true);if(UI.panel?.id)UI.renderPanel();}finally{applying=false;}
+    try{S.save=structuredClone(m.save);S.save.settings={...S.save.settings,...settings};
+      const gear=JSON.stringify([m.save.cls,m.save.lvl,m.save.eq,m.save.runeBoard,m.save.skillRunes,m.save.fashion,m.save.pet,m.save.mount]),panel=JSON.stringify([m.save.inv,m.save.bag,m.save.gold,m.save.honor,m.save.war,m.save.diamond,m.save.gacha,m.save.vault,m.save._onlineMarket]);
+      const changed=gear!==lastGear||panel!==lastPanel;
+      if(changed||performance.now()-lastCache>5000){nativePersist();lastCache=performance.now();}
+      if(W.player&&gear!==lastGear){W.player.cls=S.save.cls;W.player.look=S.lookPlayer();S.applyFlags(W.player,{...S.calcPlayer()});}
+      if(changed){UI.refreshHud?.(true);if(UI.panel?.id)UI.renderPanel();}lastGear=gear;lastPanel=panel;
+    }finally{applying=false;}
   });
   NET.on('online_pickup_result',m=>pickups.delete(m.id));
   NET.on('online_event',m=>{const e=m.event;if(e.t==='toast')UI.toast(...e.args);else if(e.t==='announce')UI.announce(...e.args);else if(e.t==='match_result'||e.t==='dungeon_result'){UI.announce(e.t==='match_result'?(e.winner===e.team?'ชนะการแข่งขัน':'จบการแข่งขัน'):'จบดันเจี้ยน','รางวัลบันทึกบนเซิร์ฟเวอร์แล้ว');}});
@@ -90,14 +97,16 @@
   S.refreshPlayer=(...args)=>{if(SW.active&&!applying)return;return nativeRefresh(...args);};
   S.persist=()=>{if(applying||!SW.active)return nativePersist();if(SW.ready){const text=JSON.stringify(S.save.settings);if(text!==lastSettings){lastSettings=text;clearTimeout(settingsTimer);settingsTimer=setTimeout(()=>command('settings',[JSON.parse(text)]),400);}}if(official){const save=S.save;S.save=structuredClone(official);nativePersist();S.save=save;}};
   const update=E.update,walk=E.walkTo,move=E.move,hit=E.hit,cast=E.cast,heal=E.heal,kill=E.kill,potion=S.usePotion;
-  E.update=dtReal=>{poll();if(!SW.active)return update(dtReal);const dt=Math.min(.05,dtReal),p=W.player;intent=null;if(SW.ready&&!p.dead&&!W.mode.over&&!W.mode.ended)S.playerControl(p,dt);
+  E.update=dtReal=>{poll();if(!SW.active)return update(dtReal);const dt=Math.min(.05,dtReal),p=W.player;intent=null;for(let i=0;i<p.cds.length;i++)p.cds[i]=Math.max(0,p.cds[i]-dt);p.gcd=Math.max(0,p.gcd-dt);for(const k in p.cc)p.cc[k]=Math.max(0,p.cc[k]-dt);if(SW.ready&&!p.dead&&!W.mode.over&&!W.mode.ended)S.playerControl(p,dt);
     if(SW.ready&&performance.now()-lastIntent>90){lastIntent=performance.now();if(intent){send({t:'online_action',action:'move',...intent});moving=true;}else if(moving){send({t:'online_action',action:'move',x:p.x,y:p.y});moving=false;}}
+    if(SW.ready&&p._authX!=null&&!p.dead&&!p.dashing&&!p.kb){const d=Math.hypot(p._authX-p.x,p._authY-p.y),tolerance=intent?Math.max(.35,(p.moveSpd||4)*.2):.02;if(d>tolerance){const k=Math.min(1,dt*8)*(d-tolerance)/Math.max(d,.001);move(p,(p._authX-p.x)*k,(p._authY-p.y)*k);}}
+    for(const projectile of W.projs){projectile.x+=(projectile.vx||0)*dt;projectile.y+=(projectile.vy||0)*dt;}
     for(const u of W.units){u.anim.t+=dt;if(u!==p&&u._tx!=null){u.x+=(u._tx-u.x)*Math.min(1,dt*14);u.y+=(u._ty-u.y)*Math.min(1,dt*14);}if(u.flash>0)u.flash-=dt;}
     for(let i=W.timers.length-1;i>=0;i--){const t=W.timers[i];t.t-=dt;if(t.t<=0){W.timers.splice(i,1);t.fn();}}
     if(SW.ready&&!p.dead)for(const l of W.loots)if(U.d2(l.x,l.y,p.x,p.y)<=1.44&&performance.now()-(pickups.get(l.id)||-10000)>1500){pickups.set(l.id,performance.now());send({t:'online_pickup',id:l.id});}
     V.update(dt);return dt;};
-  E.walkTo=(u,x,y,dt,stop=.15)=>{if(SW.active&&u===W.player){intent={x,y};return U.d2(u.x,u.y,x,y)<=stop*stop;}return walk(u,x,y,dt,stop);};
-  E.move=(u,dx,dy)=>{if(SW.active&&u===W.player){intent={x:U.clamp(u.x+dx*12,0,W.map.w-.1),y:U.clamp(u.y+dy*12,0,W.map.h-.1)};return true;}return move(u,dx,dy);};
+  E.walkTo=(u,x,y,dt,stop=.15)=>{if(SW.active&&u===W.player){const destination={x,y},result=walk(u,x,y,dt,stop);intent=destination;return result;}return walk(u,x,y,dt,stop);};
+  E.move=(u,dx,dy)=>{if(SW.active&&u===W.player){intent={x:U.clamp(u.x+dx*12,0,W.map.w-.1),y:U.clamp(u.y+dy*12,0,W.map.h-.1)};return move(u,dx,dy);}return move(u,dx,dy);};
   E.hit=(src,t,...args)=>{if(SW.active){if(SW.ready&&(src===W.player||src.owner===W.player)&&t?._worldId!=null)send({t:'online_action',action:'basic',target:t._worldId});return 0;}return hit(src,t,...args);};
   E.cast=(u,slot,aim)=>{if(!SW.active)return cast(u,slot,aim);if(!SW.ready||u!==W.player||!E.ready(u,slot))return false;const t=aim?aim.u:u.target;send({t:'online_action',action:'cast',slot,target:t?._worldId,x:aim?.x??t?.x??u.x,y:aim?.y??t?.y??u.y});u.gcd=.35;return true;};
   E.heal=(...args)=>{if(!SW.active)return heal(...args);};E.kill=(...args)=>{if(!SW.active)return kill(...args);};

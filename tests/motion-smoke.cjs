@@ -1,0 +1,12 @@
+// Measure rendered movement between authoritative snapshots with 160ms simulated network RTT.
+const assert=require('node:assert/strict'),{chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});try{
+ const context=await browser.newContext({viewport:{width:1280,height:720}}),p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.routeWebSocket('**/ws',route=>{const server=route.connectToServer();server.onMessage(message=>setTimeout(()=>route.send(message),80));route.onMessage(message=>setTimeout(()=>server.send(message),80));});
+ await p.goto(process.env.ASHFALL_TEST_URL||'http://127.0.0.1:8099');await p.waitForFunction(()=>window.ASHFALL_NET?.authed&&ASHFALL_NET.features?.onlineAuthority===2);
+ await p.evaluate(()=>{G.S.save=G.S.newSave('Motion test','guardian');document.getElementById('boot2').hidden=true;document.getElementById('title-screen').hidden=true;G.S.goFarm(0);});await p.waitForFunction(()=>G.SHARED_WORLD.ready&&G.SHARED_WORLD.characterRevision>0);await p.bringToFront();
+ const key=await p.evaluate(()=>{const u=G.W.player,option=[['d',1,0],['a',-1,0],['s',0,1],['w',0,-1]].find(([,dx,dy])=>G.E.clearLine(u.x,u.y,u.x+dx*6,u.y+dy*6));if(!option)throw Error('No clear test path');window.motionFrames=[];window.motionRecording=true;function frame(t){if(!motionRecording)return;motionFrames.push([t,G.W.player.x,G.W.player.y,G.SHARED_WORLD.revision]);requestAnimationFrame(frame);}requestAnimationFrame(frame);return option[0];});
+ await p.keyboard.down(key);await p.waitForTimeout(1200);await p.keyboard.up(key);const samples=await p.evaluate(()=>{motionRecording=false;return motionFrames;});
+ const deltas=samples.slice(1).map((q,i)=>Math.hypot(q[1]-samples[i][1],q[2]-samples[i][2])),changing=deltas.filter(d=>d>.0005).length,fraction=changing/deltas.length,displacement=Math.hypot(samples.at(-1)[1]-samples[0][1],samples.at(-1)[2]-samples[0][2]);
+ console.log(JSON.stringify({url:process.env.ASHFALL_TEST_URL,simulatedRTTms:160,frames:samples.length,movingFrameFraction:+fraction.toFixed(3),displacement:+displacement.toFixed(2),snapshots:new Set(samples.map(q=>q[3])).size}));assert.deepEqual(errors,[]);assert.ok(displacement>1,'player moved through the authoritative world');if(!process.env.ASHFALL_BASELINE)assert.ok(fraction>.6,'movement continues between snapshots');
+ }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

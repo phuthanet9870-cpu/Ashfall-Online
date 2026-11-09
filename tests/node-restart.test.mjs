@@ -25,7 +25,7 @@ test('real Node process persists trade, inventory and a damaged shared monster a
   const ready=await a.enter({kind:'farm',id:'meadow'}),player=a.units.get(ready.state.units.find(u=>u.pid===ready.playerId).id);
   const mob=[...a.units.values()].filter(u=>u.kind==='mob'&&u.grade==='normal'&&u.hp>200).sort((x,y)=>Math.hypot(x.x-player.x,x.y-player.y)-Math.hypot(y.x-player.x,y.y-player.y))[0];assert.ok(mob);
   a.send({t:'online_action',action:'move',x:mob.x,y:mob.y});await a.condition(()=>{const u=[...a.units.values()].find(u=>u.pid===ready.playerId),m=a.units.get(mob.id);return Math.hypot(u.x-m.x,u.y-m.y)<1.9;},30000);
-  const hp=a.units.get(mob.id).hp;a.send({t:'online_action',action:'basic',target:mob.id});await a.condition(()=>a.units.get(mob.id)?.hp<hp);assert.ok(a.units.get(mob.id).hp>0);
+  const hp=a.units.get(mob.id).hp;const attack=setInterval(()=>{const target=a.units.get(mob.id);if(target){a.send({t:'online_action',action:'move',x:target.x,y:target.y});a.send({t:'online_action',action:'basic',target:mob.id});}},200);try{await a.condition(()=>a.units.get(mob.id)?.hp<hp);}finally{clearInterval(attack);}assert.ok(a.units.get(mob.id).hp>0);
   await a.command('settings',[{music:false}]);const savedHP=a.units.get(mob.id).hp,identity={pid:a.pid,key:a.key,characterId:a.characterId};
   const exited=once(child,'exit');child.kill('SIGKILL');await exited;await start();
   const restored=await new GameClient(url).connect();clients.push(restored);Object.assign(restored,identity);await restored.auth('Persist A');const entered=await restored.enter({kind:'farm',id:'meadow'});

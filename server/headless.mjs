@@ -1,3 +1,4 @@
+import '../public/js/gm2.js';
 import '../public/js/data.js';
 import '../public/js/skills25.js';
 import '../public/js/engine.js';
@@ -52,7 +53,7 @@ export function createHeadless() {
   G.FX6={mini:noop,REC:{},PAL:{}}; G.TX=new Proxy({}, {get:()=>noop});
   const panels=new Proxy({}, {get:(o,k)=>o[k] ||= {tabs:[],render:()=>'',after:noop}});
   G.UI=new Proxy({PANELS:panels,esc:x=>String(x??''),ICONS:{W:{},ARM:{}},ICONKIT:{make:noop}}, {get:(o,k)=>o[k] || noop});
-  const names=['data','skills25','engine','riders','systems','modes','items2','classset','inv2','costume','passives','setult2','elements','botpower','boss_manifest','bosses','wboss2','deco_manifest','city','mon_manifest','monsters48','classmech','items3','dungeon2','enh2','noquest','vault','forge','jobs','fash2','gacha2','fashaura','petart','fashfx','balance','tickreq'];
+  const names=['data','skills25','engine','riders','systems','modes','items2','classset','inv2','costume','passives','setult2','elements','botpower','boss_manifest','bosses','wboss2','deco_manifest','city','mon_manifest','monsters48','classmech','items3','dungeon2','enh2','noquest','vault','forge','jobs','fash2','gacha2','fashaura','petart','fashfx','balance','tickreq','gm2'];
   for(const name of names) { try {globalThis.ASHFALL_SIM_FACTORIES[name](G);}catch(e){throw new Error(name+': '+e.message,{cause:e});} }
   for(const fn of deferred) fn();
   G.E.renderMapCanvas=noop; G.E.vis=()=>false; G.E.spriteInfo=()=>({img:null,sx:0,sy:0,w:24,h:24,sc:1});

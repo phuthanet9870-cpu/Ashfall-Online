@@ -2,6 +2,7 @@ import {createCharacters} from './characters.mjs';
 import {createWorldRuntime,normalizeMode} from './world-runtime.mjs';
 import {executeEconomy,allItems} from './economy.mjs';
 import {clone} from './headless.mjs';
+import {executeGM} from './gm.mjs';
 
 const bytes=n=>[...crypto.getRandomValues(new Uint8Array(n))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const passwordHash=async(password,salt)=>{const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);const hash=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:100000,hash:'SHA-256'},key,256);return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');};
@@ -16,7 +17,7 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
   async function flush(force=false,additional=[]){
     if(!force&&now()-lastFlush<1000)return;
     if(!force&&!dirty.size&&!guildResults.size&&![...worlds.values()].some(w=>w.sim.size))return;
-    const fingerprint=r=>JSON.stringify({save:r.save,commands:r.commands});
+    const fingerprint=r=>JSON.stringify({save:r.save,commands:r.commands,gmFlags:r.gmFlags});
     const records=[...dirty].filter(r=>savedTexts.get(r.id)!==fingerprint(r));const extra=[...additional],updatedGuilds=[];
     if(worldCatalog)extra.push(['world-catalog:v2',[...worldCatalog.values()]]);
     for(const result of guildResults.values())for(let i=0;i<result.guilds.length;i++){const id=result.guilds[i],g=await storage.get('g:'+id);if(!g)continue;g.wins=(g.wins||0)+(i===result.winner?1:0);g.losses=(g.losses||0)+(i!==result.winner?1:0);g.rating=Math.max(0,(g.rating||1000)+(i===result.winner?20:-15));extra.push(['g:'+id,g,true]);updatedGuilds.push([id,g]);}
@@ -48,7 +49,7 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
   }
   async function handle(c,m){
     if(m.t.startsWith('account_')){
-      if(m.t==='account_logout'){await leave(c);if(c.sessionKey)await chars.docs.commit([['login-session:'+c.sessionKey,null]]);identityChanged(c,c.pid,null);c.pid=null;c.accountName=null;send(c,{t:'account_logged_out'});return;}
+      if(m.t==='account_logout'){await leave(c);if(c.sessionKey)await chars.docs.commit([['login-session:'+c.sessionKey,null]]);identityChanged(c,c.pid,null);c.pid=null;c.accountName=null;c.gmPID=null;send(c,{t:'account_logged_out'});return;}
       let account,token;
       if(m.t==='account_resume'){
         if(typeof m.token!=='string'||m.token.length!==64)throw new Error('invalid_session');
@@ -73,6 +74,9 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
       send(c,{t:'account_ok',request:m.request,pid:account.id,username:account.username,token,characters:await chars.list(account.id)});send(c,{t:'me',pid:c.pid});return;
     }
     if(!c.pid)throw new Error('auth_required');
+    if(m.t==='online_gm_unlock'){
+      if(m.code!=='gmadmin2008')throw new Error('invalid_gm_code');c.gmPID=c.pid;send(c,{t:'online_gm_unlocked',request:m.request,gm:true});return;
+    }
     if(m.t==='online_character_delete'||m.t==='online_character_restore'){
       if(!chars.validId(m.character))throw new Error('invalid_character');const id=c.pid+':'+m.character;
       let record=clone(chars.cache.get(id)||await chars.docs.read(chars.key(id)));if(!record)throw new Error('character_not_found');
@@ -104,13 +108,26 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
       if(!world){if(worlds.size>=64){const idle=[...worlds.values()].find(w=>!w.sim.size);if(idle)worlds.delete(idle.key);else throw new Error('world_capacity');}let cp=await chars.docs.read('world:v2:'+key);if(cp?.mode?.over)cp=null;world={key,baseKey,channel,sim:createWorldRuntime(desc,{checkpoint:cp,changed:r=>dirty.add(r),event:(pid,e)=>{notify(pid,e);if(e.t==='match_result'&&e.kind==='siege'&&!guildResults.has(key))guildResults.set(key,{winner:e.winner,guilds:world.sim.guilds});}}),idleAt:now()};worlds.set(key,world);worldCatalog.set(key,{key,baseKey,channel,server,desc});}
       if(world.sim.size>=playerCap&&!world.sim.members.has(record.id))throw new Error('world_full');
       const current=sessions.get(c);
-      if(current?.record.id!==record.id||current?.world!==world){await leave(c);for(const[other,s]of sessions)if(s.record.id===record.id){await leave(other);send(other,{t:'kicked',why:'character_in_use'});}world.sim.enter(record,guild);sessions.set(c,{record,world,server,geometryEpoch:world.sim.epoch});}
+      if(current?.record.id!==record.id||current?.world!==world){await leave(c);for(const[other,s]of sessions)if(s.record.id===record.id){await leave(other);send(other,{t:'kicked',why:'character_in_use'});}if(c.gmPID!==c.pid)record.gmFlags={};world.sim.enter(record,guild);sessions.set(c,{record,world,server,geometryEpoch:world.sim.epoch});}
       const s=sessions.get(c);c.onlineRoom=key;
       await flush(true);
-      send(c,{t:'online_ready',request:m.request,character:record.character,playerId:record.id,room:key,channel:world.channel||1,mode:desc,geometry:world.sim.geometry(),state:world.sim.snapshot(),self:world.sim.self(record.id)});characterMessage(c,record);
+      send(c,{t:'online_ready',request:m.request,character:record.character,playerId:record.id,room:key,channel:world.channel||1,gm:c.gmPID===c.pid,mode:desc,geometry:world.sim.geometry(),state:world.sim.snapshot(),self:world.sim.self(record.id)});characterMessage(c,record);
       return;
     }
     const s=sessions.get(c);if(!s||s.record.account!==c.pid)throw new Error('character_not_active');
+    if(m.t==='online_gm_lock'){c.gmPID=null;s.record.gmFlags={};s.world.sim.sync(s.record.id);dirty.add(s.record);await flush(true);send(c,{t:'online_gm_locked',request:m.request});return;}
+    if(m.t==='online_gm'){
+      if(c.gmPID!==c.pid)throw new Error('gm_required');if(typeof m.id!=='string'||m.id.length>80)throw new Error('invalid_command_id');
+      const id='gm:'+m.id,previous=s.record.commands.find(x=>x.id===id);if(previous){send(c,{t:'online_gm_result',request:m.request,result:previous.result});return;}
+      const records=[...s.world.sim.members.values()].map(a=>a.record),before=records.map(r=>clone(r)),checkpoint=s.world.sim.checkpoint(),priorResults=new Map(guildResults);
+      try{
+        for(const[tradeId,t]of trades)if(t.players.includes(s.record.id))cancelTrade(tradeId,'gm_changed_inventory');
+        const result=clone(s.world.sim.context(s.record.id,()=>executeGM(s.world.sim,s.record,m.command,m.input)));
+        s.record.commands.push({id,result});if(s.record.commands.length>200)s.record.commands.shift();for(const r of records)dirty.add(r);
+        const audit=await chars.docs.read('gm-audit:v1')||[];audit.push({id,at:now(),actor:c.pid,username:c.accountName||null,character:s.record.character,room:s.world.key,command:m.command});
+        await flush(true,[['gm-audit:v1',audit.slice(-200)]]);send(c,{t:'online_gm_result',request:m.request,result});
+      }catch(e){records.forEach((r,i)=>Object.assign(r,before[i]));s.world.sim.restore(checkpoint);guildResults.clear();for(const[k,v]of priorResults)guildResults.set(k,v);throw e;}return;
+    }
     if(m.t==='online_leave'){await leave(c);return;}
     if(m.t==='online_action'){s.world.sim.action(s.record.id,m);if(m.action==='potion'||m.action==='portal')await flush(true);return;}
     if(m.t==='online_pickup'){
@@ -168,8 +185,8 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
     tick(){const t=now(),elapsed=Math.min(250,Math.max(0,t-lastTick));lastTick=t;return enqueue(async()=>{
       if(storageBlocked){await flush(true);return;}
       const simStart=performance.now();accumulator+=elapsed;while(accumulator>=50){for(const w of worlds.values())if(w.sim.size)w.sim.tick(.05);accumulator-=50;}
-      lastSimulationMs=performance.now()-simStart;await flush();
-      if(t-broadcastAt>=150){broadcastAt=t;const samples=new Map();
+      lastSimulationMs=performance.now()-simStart;
+      if(t-broadcastAt>=100){broadcastAt=t;const samples=new Map();
       for(const[c,s]of sessions){if(c.pid!==s.record.account){await leave(c);continue;}const w=s.world;
         if(s.geometryEpoch!==w.sim.epoch){s.geometryEpoch=w.sim.epoch;send(c,{t:'online_geometry',room:w.key,geometry:w.sim.geometry()});}
         if(!samples.has(w)){
@@ -182,12 +199,13 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
           const state=w.encoded&&w.lastEpoch===w.sim.epoch?{...full,delta:true,units:updates,removed}:full;
           w.encoded=encoded;w.lastEpoch=w.sim.epoch;
           const grids=w.sim.G.W.map;state.mapPatch=[];
-          if(w.grids&&w.gridEpoch===w.sim.epoch)for(let i=0;i<grids.block.length;i++)if(['block','fall','tiles','pvp'].some(k=>w.grids[k][i]!==grids[k][i]))state.mapPatch.push([i,grids.tiles[i],grids.block[i],grids.fall[i],grids.pvp[i]]);
+          if(w.grids&&w.gridEpoch===w.sim.epoch)for(let i=0;i<grids.block.length;i++)if((w.grids.block[i]!==grids.block[i]||w.grids.fall[i]!==grids.fall[i]||w.grids.tiles[i]!==grids.tiles[i]||w.grids.pvp[i]!==grids.pvp[i]))state.mapPatch.push([i,grids.tiles[i],grids.block[i],grids.fall[i],grids.pvp[i]]);
           w.grids={};for(const k of ['block','fall','tiles','pvp'])w.grids[k]=Uint8Array.from(grids[k]);w.gridEpoch=w.sim.epoch;
           samples.set(w,state);
         }
         send(c,{t:'online_state',room:w.key,state:samples.get(w),self:w.sim.self(s.record.id)});
       }}
+      await flush();
       for(const[id,t]of trades)if(t.expires<now())cancelTrade(id,'expired');
       for(const[key,w]of worlds)if(!w.sim.size&&now()-w.idleAt>300000)worlds.delete(key);
     });},stats:()=>({worlds:worlds.size,characters:sessions.size,trades:trades.size,storageBlocked,lastSimulationMs,lastFlushMs}),flush:()=>enqueue(()=>flush(true)),worlds,sessions,characters:chars,trades};

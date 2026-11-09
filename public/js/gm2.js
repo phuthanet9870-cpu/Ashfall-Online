@@ -1,4 +1,6 @@
 'use strict';
+(function(init){(globalThis.ASHFALL_SIM_FACTORIES ||= {}).gm2=init;if(typeof window!=='undefined')init(window.G);})(function(G){
+'use strict';
 /* GM v2:
    · "ชุดด่วน" builds the strongest kit for the current class: every gear/accessory/relic slot is picked from a pool of
      tier-10 ilv-100 rolls by the class score, then enhanced to +10 (with its random enhance options) and socketed with
@@ -32,6 +34,7 @@
     S.refreshPlayer(true); S.persist(); return S.calcPlayer().cp; };
   S.gmAutoNoSet = () => { const s = S.save; for (const k in s.eq) { const it = s.eq[k]; if (it && it.cset) { s.inv.push(it); delete s.eq[k]; } }
     const hidden = s.inv.filter(it => it.cset); s.inv = s.inv.filter(it => !it.cset); let r; try { r = S.autoEquip(); } finally { s.inv.push(...hidden); } S.refreshPlayer(true); S.persist(); return r; };
+  if (G.headless) return;
   // ---------- GM panel ----------
   const gmR = UI.gmRender; UI.gmRender = (tab, P) => { let h = gmR(tab, P); if (tab !== 'item') return h;
     return h.replace(/<button class="btn" data-act="gm" data-c="kit">[^<]*<\/button>/, `<button class="btn primary" data-act="gm" data-c="kit2">⚡ ชุดด่วน: เก่งสุดสำหรับ ${UI.esc(D.CLS[S.save.cls].name)} (ระดับ 10 · ตีบวก +10 · เจมครบ · ไม่ใช้ชุดคลาส)</button><button class="btn" data-act="gm" data-c="autons">🎯 ออโต้ใส่ของดีที่สุดในกระเป๋า (ไม่รวมชุดคลาส)</button>`); };
@@ -39,7 +42,8 @@
     if (c === 'kit2' || c === 'kit') { const cp0 = S.calcPlayer().cp; const cp = S.gmBestKit(c === 'kit2' ? 12 : 8); UI.toast(`GM: สวมชุดเก่งสุดสำหรับ ${D.CLS[S.save.cls].name} · พลัง ${U.fmt(cp0)} → ${U.fmt(cp)}`, 'good'); UI.renderPanel(); return; }
     if (c === 'autons') { const cp0 = S.calcPlayer().cp; const r = S.gmAutoNoSet(); UI.toast(`GM: ออโต้สวมใส่ ${r && r.changes ? r.changes.length : 0} ชิ้น (ไม่รวมชุดคลาส) · พลัง ${U.fmt(cp0)} → ${U.fmt(S.calcPlayer().cp)}`, 'good'); UI.renderPanel(); return; }
     return gmC(c, el); };
-})(window.G);
+})(G);
+if (G.headless) return;
 // ---------- bag: instant "auto class set" button ----------
 (function (G) {
   const S = G.S, UI = G.UI, D = G.D;
@@ -52,4 +56,6 @@
     const before = PIECES.filter(p => s.eq[p] && s.eq[p].set === 'cs_' + s.cls).length; S.wearSet('cs_' + s.cls); const worn = PIECES.filter(p => s.eq[p] && s.eq[p].set === 'cs_' + s.cls).length;
     S.persist && S.persist(); UI.toast(worn > before ? `สวมชุดคลาส ${worn}/6 ชิ้น${worn >= 6 ? ' · ปลดล็อกอัลติเมตชุดคลาส' : ''}` : `ใส่ชุดคลาสที่ดีที่สุดอยู่แล้ว (${worn}/6)`, worn > before ? 'good' : 'info'); UI.renderPanel(); };
   const css = document.createElement('style'); css.textContent = '.rbtn.cs-auto{border-color:#ff8ad8!important;color:#ffd0f0}'; document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

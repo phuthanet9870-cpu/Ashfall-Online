@@ -38,7 +38,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 2 * 1024 * 10
 wss.on('connection', ws => { const c = core.connect({ send: s => { if(ws.readyState!==1)return; if(ws.bufferedAmount>2*1024*1024){ws.close(1013,'Client too slow');return;}ws.send(s); }, close: () => ws.close() }); let alive = true;
   ws.on('pong', () => { alive = true; }); ws.on('message', d => core.message(c, d.toString())); ws.on('close', () => core.disconnect(c));
   const iv = setInterval(() => { if (!alive) { clearInterval(iv); return ws.terminate(); } alive = false; try { ws.ping(); } catch (e) { } }, 30000); ws.on('close', () => clearInterval(iv)); });
-setInterval(() => core.tickFast(), 100); setInterval(() => core.tickLobby(), 2000);
+setInterval(() => core.tickFast(), 50); setInterval(() => core.tickLobby(), 2000);
 server.listen(PORT, () => console.log(`Ashfall Online on :${PORT}`));
 
 let shuttingDown=false;

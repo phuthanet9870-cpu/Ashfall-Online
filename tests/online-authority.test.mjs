@@ -147,3 +147,35 @@ test('targeted casts reject remote targets before consuming resources or dealing
  const w=createWorldRuntime({kind:'farm',id:'meadow'}),G=w.G,cls=G.D.CLASSES.find(c=>c.skills.some(s=>s.arch==='chain')),slot=cls.skills.findIndex(s=>s.arch==='chain'),record={id:'caster:character-1',save:G.S.newSave('Caster',cls.id)};record.save.lvl=250;const u=w.enter(record),mob=G.W.units.find(unit=>unit.kind==='mob');mob.x=u.x+25;mob.y=u.y;const hp=mob.hp,res=u.res;
  assert.equal(w.action(record.id,{action:'cast',slot,target:mob.id,x:mob.x,y:mob.y}),false);assert.equal(mob.hp,hp);assert.equal(u.res,res);assert.equal(u.cds[slot],0);
 });
+
+test('server GM requires an authenticated explicit unlock, persists grants once, and audits them',async()=>{
+ const f=fixture(),a=f.client('gm-owner'),b=f.client('gm-viewer');await f.enter(a);await f.enter(b);const s=f.service.sessions.get(a);
+ const command={t:'online_gm',id:'grant-test',command:'cur',input:{dataset:{k:'gold'},values:{gmamt:500}}};
+ await f.send(a,command);assert.equal(f.last(a,'online_error').error,'gm_required');assert.equal(s.record.save.gold,3000);
+ await f.send(a,{t:'online_gm_unlock',code:'wrong-code'});assert.equal(f.last(a,'online_error').error,'invalid_gm_code');
+ await f.send(a,{t:'online_gm_unlock',code:'gmadmin2008'});await f.send(a,command);await f.send(a,command);assert.equal(s.record.save.gold,3500);
+ assert.equal((await f.service.characters.docs.read('gm-audit:v1')).length,1);assert.equal(f.service.sessions.get(b).record.save.gold,3000);
+ const saved=fixture(f.db),c=saved.client('gm-owner');await saved.enter(c);assert.equal(saved.service.sessions.get(c).record.save.gold,3500);await saved.send(c,{...command,id:'another'});assert.equal(saved.last(c,'online_error').error,'gm_required');
+});
+
+test('GM spawns, flags and world edits affect the shared simulation and survive durable world restore',async()=>{
+ const f=fixture(),a=f.client('gm-world-owner'),b=f.client('gm-world-viewer');await f.enter(a,{kind:'farm',id:'meadow'});await f.enter(b,{kind:'farm',id:'meadow'});await f.send(a,{t:'online_gm_unlock',code:'gmadmin2008'});const s=f.service.sessions.get(a),w=s.world.sim,before=w.snapshot().units.filter(u=>u.kind==='mob').length;
+ await f.send(a,{t:'online_gm',id:'spawn-1',command:'spawnMonster',input:{dataset:{i:'0'},values:{gmxlv:'10',gmxn:'2',gmxdm:true}}});assert.equal(w.snapshot().units.filter(u=>u.kind==='mob').length,before+2);
+ await f.send(a,{t:'online_gm',id:'freeze-1',command:'mfreeze'});assert.equal(w.G.W.gm.freeze,true);await f.tick(2);assert.ok(f.out.get(b).filter(m=>m.t==='online_state').some(m=>m.state.units.some(u=>u.lvl===10)));
+ await f.send(a,{t:'online_gm',id:'god-1',command:'flag',input:{dataset:{k:'god'},enabled:true}});const u=w.members.get(s.record.id).unit,mob=w.G.W.units.find(u=>u.kind==='mob');const hp=u.hp;w.G.E.hit(mob,u,100,{elem:'phys',cc:{}});assert.equal(u.hp,hp);
+ const cp=w.checkpoint(),restored=createWorldRuntime(cp.desc,{checkpoint:cp});assert.equal(restored.G.W.gm.freeze,true);assert.ok(restored.G.W.units.some(u=>u._gmDummy));
+ await f.send(a,{t:'online_gm_lock'});assert.equal(s.record.gmFlags.god,undefined);await f.send(a,{t:'online_gm',id:'denied-2',command:'mclear'});assert.equal(f.last(a,'online_error').error,'gm_required');
+});
+
+test('failed GM storage rolls back both shared world changes and item grants without writing an audit receipt',async()=>{
+ const f=fixture(),a=f.client('gm-rollback-owner');await f.enter(a,{kind:'farm',id:'meadow'});await f.send(a,{t:'online_gm_unlock',code:'gmadmin2008'});const s=f.service.sessions.get(a),w=s.world.sim,count=w.snapshot().loots.length;
+ const transaction=f.storage.transaction;f.storage.transaction=async()=>{throw new Error('unavailable');};await f.send(a,{t:'online_gm',id:'failed-gm',command:'dropground'});f.storage.transaction=transaction;
+ assert.equal(w.snapshot().loots.length,count);assert.ok(w.snapshot().units.some(u=>u.pid===s.record.id));assert.equal(await f.service.characters.docs.read('gm-audit:v1'),null);
+ await f.send(a,{t:'online_gm',id:'failed-gm',command:'dropground'});assert.equal(w.snapshot().loots.length,count+10);assert.equal((await f.service.characters.docs.read('gm-audit:v1')).length,1);
+});
+
+test('GM quick kit uses shared game item rules and the resulting equipment persists',async()=>{
+ const f=fixture(),a=f.client('gm-kit-owner');await f.enter(a);await f.send(a,{t:'online_gm_unlock',code:'gmadmin2008'});const s=f.service.sessions.get(a);
+ await f.send(a,{t:'online_gm',id:'kit-once',command:'kit2'});assert.ok(f.last(a,'online_gm_result'));assert.equal(s.record.save.eq.weapon.tier,10);assert.equal(s.record.save.eq.weapon.lv,10);assert.ok(s.world.sim.members.get(s.record.id).unit.st.atk>0);
+ const saved=await f.service.characters.docs.read(f.service.characters.key(s.record.id));assert.equal(saved.save.eq.weapon.uid,s.record.save.eq.weapon.uid);
+});

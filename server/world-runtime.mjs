@@ -55,9 +55,11 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
   const rawDrop=S.dropLoot;
   S.dropLoot=(x,y,item)=>{if(!item)return;rawDrop(x,y,item);const l=W.loots.at(-1);l.id=`${worldId}-${++lootSeq}`;l.created=W.time;};
   S.updateLoot=noop;
-  const context=(pid,fn)=>{const a=members.get(pid);if(!a)return;const s=S.save,p=W.player;S.save=a.record.save;W.player=a.unit;try{return fn(a);}finally{a.record.save=S.save;S.save=s;W.player=p;}};
+  const context=(pid,fn)=>{const a=members.get(pid);if(!a)return;const s=S.save,p=W.player,slots=W.gm.allSlots,runes=W.gm.allRunes;S.save=a.record.save;W.player=a.unit;W.gm.allSlots=!!a.record.gmFlags?.allSlots;W.gm.allRunes=!!a.record.gmFlags?.allRunes;try{return fn(a);}finally{a.record.save=S.save;S.save=s;W.player=p;W.gm.allSlots=slots;W.gm.allRunes=runes;}};
   const rawUpdate=E.updateUnit;
-  E.updateUnit=(u,dt)=>u.pid?context(u.pid,()=>rawUpdate(u,dt)):rawUpdate(u,dt);
+  E.updateUnit=(u,dt)=>{if(u.kind==='mob'&&(W.gm.freeze||u._gmDummy)){u.cc.st=Math.max(u.cc.st,dt+.1);}return u.pid?context(u.pid,()=>rawUpdate(u,dt)):rawUpdate(u,dt);};
+  const recalc=E.recalc;E.recalc=u=>{const result=recalc(u),flags=members.get(u.pid)?.record.gmFlags;if(flags?.pspd)u.moveSpd*=flags.pspd;return result;};
+  const targetable=E.targetable;E.targetable=(src,target)=>src?.kind==='mob'&&members.get(target?.pid)?.record.gmFlags?.invis?false:targetable(src,target);
   const rawEnemy=E.isEnemy;E.isEnemy=(a,b)=>{const x=a?.owner||a,y=b?.owner||b;if(desc.kind==='farm'&&x?.pid&&y?.pid&&x!==y){const m=W.map;return !!(m.pvp[E.idx(m,x.x,x.y)]&&m.pvp[E.idx(m,y.x,y.y)]&&(x.pk||y.pk||x.red||y.red));}return rawEnemy(a,b);};
   const rawKill=E.kill;
   E.kill=(t,k)=>{const owner=k&&(k.owner||k),id=owner?.pid||t?.pid,victim=members.get(t?.pid),wasAlive=t&&!t.dead,beforeDeaths=victim?.record.save.stats.deaths;
@@ -65,7 +67,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
     return rawKill(t,k);
   };
   const rawHit=E.hit;
-  E.hit=(source,target,...args)=>{if(!target?.isWB)return rawHit(source,target,...args);target._deferBossDeath=true;try{return rawHit(source,target,...args);}finally{target._deferBossDeath=false;if(target._pendingBossKiller&&target.hp<=0){const killer=target._pendingBossKiller;delete target._pendingBossKiller;E.kill(target,killer);}}};
+  E.hit=(source,target,...args)=>{const attacker=source?.owner||source;if(members.get(target?.pid)?.record.gmFlags?.god)return 0;if(members.get(attacker?.pid)?.record.gmFlags?.oneHit&&target&&E.isEnemy(attacker,target)){target.shield=0;target.hp=Math.min(1,target.hp);}if(!target?.isWB)return rawHit(source,target,...args);target._deferBossDeath=true;try{return rawHit(source,target,...args);}finally{target._deferBossDeath=false;if(target._pendingBossKiller&&target.hp<=0){const killer=target._pendingBossKiller;delete target._pendingBossKiller;E.kill(target,killer);}}};
   const finalizedKill=E.kill;
   E.kill=(target,killer)=>{if(target?._deferBossDeath){target._pendingBossKiller=killer;return;}return finalizedKill(target,killer);};
   S.playerControl=(u,dt)=>{const a=members.get(u.pid);if(a?.move&&!u.dead)E.walkTo(u,a.move.x,a.move.y,dt);};
@@ -111,7 +113,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
   };
   function spawnFor(team){const m=W.map;if(desc.kind==='siege'){const r=mode.R||mode.roles();return r.ci===0?(team===0?m.spawnAtt:m.spawnDef):(team===r.att?m.spawnAtt:m.spawnDef);}return (team===1?m.spawnB:m.spawnA)||m.spawn||m.spawnAtt;}
   function sync(a,heal=false){return context(a.record.id,()=>{const s=S.save,u=a.unit;u.cls=s.cls;u.lvl=s.lvl;u.name=s.name;u.build=D.CLS[s.cls].build;
-    const c=S.calcPlayer();if(mode.normalized)c.st=E.normalizedStats(s.cls);u.st0=c.st;S.applyFlags(u,c);E.recalc(u);if(heal)u.hp=u.maxhp;u.cpv=E.cp(u.st);u.red=s.infamy>=3;});}
+    const c=S.calcPlayer();if(mode.normalized)c.st=E.normalizedStats(s.cls);u.st0=c.st;S.applyFlags(u,c);E.recalc(u);if(heal)u.hp=u.maxhp;u.cpv=E.cp(u.st);u.red=s.infamy>=3;u.allSkills=!!a.record.gmFlags?.allSkills;});}
   function enter(record,guild){
     if(members.has(record.id))return members.get(record.id).unit;
     if(desc.kind==='dungeon'&&desc.floor>(record.save.dungeons[desc.id]?.cp||0)+1)throw new Error('checkpoint_locked');
@@ -148,7 +150,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
       if(!Number.isInteger(m.slot)||m.slot<0||m.slot>=D.NSK||!Number.isFinite(m.x)||!Number.isFinite(m.y)||!E.inside(W.map,m.x,m.y))return false;
       const skill=E.skillOf(u,m.slot);if(!skill)return false;const range=E.skillRange(skill);if(target&&target!==u&&U.dist(u,target)>range+.35)return false;
       const dx=m.x-u.x,dy=m.y-u.y,d=Math.hypot(dx,dy),k=d>range?range/d:1;
-      const old=W.player;W.player=null;try{return E.cast(u,m.slot,{x:u.x+dx*k,y:u.y+dy*k,u:target});}finally{W.player=old;}
+      const old=W.player,noCd=W.gm.noCd;W.player=a.record.gmFlags?.noCd?u:null;W.gm.noCd=!!a.record.gmFlags?.noCd;try{return E.cast(u,m.slot,{x:u.x+dx*k,y:u.y+dy*k,u:target});}finally{W.player=old;W.gm.noCd=noCd;}
     }return false;
   });}
   function tick(dt=.05){const first=[...members.values()].find(a=>!a.unit.dead)||members.values().next().value;if(!first)return;S.save=first.record.save;W.player=first.unit;
@@ -163,7 +165,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
     out.walls=m.walls.map(w=>({tx:w.tx,ty:w.ty,color:w.img?.args?.[0]||'#777777'}));
     for(const k of ['g','acc','bg','portalPt','exitPt','bossPt','bossSpot','center','plazaC','saves','warps','flag','throne','points','hill','path','ice','rift','sky','c','VR','vill'])if(m[k]!==undefined)out[k]=clone(m[k]);return out;
   }
-  function snapshot(){const keys=['id','pid','look','kind','cls','team','name','lvl','x','y','fx','fy','sc','hp','maxhp','res','resMax','shield','dead','deadT','moving','grade','boss','col','col2','body','elem','md','fashion','title','guildTag','mounted','cc','buffs','stealth','jz','red','pk','role','roleTh','label','vk','gk','sub','isWB','wbId','wbPh','wbEnr','ms'];
+  function snapshot(){const keys=['id','pid','look','kind','cls','team','name','lvl','x','y','fx','fy','sc','hp','maxhp','res','resMax','moveSpd','rooted','dashing','kb','shield','dead','deadT','moving','grade','boss','col','col2','body','elem','md','fashion','title','guildTag','mounted','cc','buffs','stealth','jz','red','pk','role','roleTh','label','vk','gk','sub','isWB','wbId','wbPh','wbEnr','ms'];
     const meta={};for(const k of ['floor','full','cleared','ended','over','winner','waiting','score','t','limit','target','round','roundWins','phase','prepT','roundT','line','hold','throne','tickets','pool','kills','R','safeR','half','history','timers','teamNames'])if(mode[k]!==undefined)meta[k]=clone(mode[k]);
     if(mode.run)meta.run={cleared:mode.run.cleared,bosses:clone(mode.run.bosses),king:mode.run.king,got:[]};
     if(mode.points)meta.points=clone(mode.points);if(mode.hill)meta.hill=clone(mode.hill);if(mode.payload)meta.payload=clone(mode.payload);
@@ -178,7 +180,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
     const unitSet=new Set(W.units),seen=new Set();
     function encode(v,depth=0){if(v===null||typeof v!=='object')return typeof v==='function'?undefined:v;if(depth>16)return undefined;if(unitSet.has(v))return {$unit:v.id};if(v instanceof Set)return {$set:[...v].map(x=>encode(x,depth+1))};if(v instanceof Map)return {$map:[...v].map(([k,val])=>[encode(k,depth+1),encode(val,depth+1)])};if(ArrayBuffer.isView(v))return Array.from(v);if(seen.has(v))return undefined;seen.add(v);const out=Array.isArray(v)?[]:{};for(const k of Object.keys(v))if(!['look','sheet','spr','propSpr','img','canvas','brain','update','renderGround','renderTop','hud','portals'].includes(k)){const x=encode(v[k],depth+1);if(x!==undefined)out[k]=x;}seen.delete(v);return out;}
     const units=W.units.map(u=>{unitSet.delete(u);const result=encode(u);unitSet.add(u);return result;});
-    return {format:2,worldId,desc,revision,epoch,lootSeq,effectSeq,time:W.time,geometry:geometry(),units,loots:encode(W.loots),projs:encode(W.projs),zones:encode(W.zones),traps:encode(W.traps),mode:encode(mode),ultimates:encode(G.SU_STATES||[]),clockFields:encode(G.TICK_FIELDS||[]),base:encode(base),guildTeams:[...guildTeams],savedAt:Date.now()};
+    return {format:2,worldId,desc,gm:clone(W.gm),revision,epoch,lootSeq,effectSeq,time:W.time,geometry:geometry(),units,loots:encode(W.loots),projs:encode(W.projs),zones:encode(W.zones),traps:encode(W.traps),mode:encode(mode),ultimates:encode(G.SU_STATES||[]),clockFields:encode(G.TICK_FIELDS||[]),base:encode(base),guildTeams:[...guildTeams],savedAt:Date.now()};
   }
   function restore(cp){
     if(cp?.format!==2)return;const byId=new Map();W.units=[];restoredPlayers.clear();guildTeams.length=0;effects.length=0;lootSeq=Math.max(lootSeq,cp.lootSeq||0,...(cp.loots||[]).map(l=>Number(String(l.id).split('-').at(-1))||0));effectSeq=Math.max(effectSeq,cp.effectSeq||0);
@@ -192,6 +194,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
     for(const q of cp.units)if(q.kind==='struct'&&q.sub==='tower'&&mode.mkTower){const temp=mode.mkTower(q.x,q.y,q.team,q.st?.atk||10);byId.get(q.id).update=temp.update;W.units=W.units.filter(u=>u!==temp);}
     if(G.SU_STATES){G.SU_STATES.splice(0,G.SU_STATES.length,...(decode(cp.ultimates)||[]));for(const st of G.SU_STATES)st.d=G.SETULT2[st.u.cls];}
     if(G.TICK_FIELDS)G.TICK_FIELDS.splice(0,G.TICK_FIELDS.length,...(decode(cp.clockFields)||[]));
+    if(cp.gm){Object.assign(W.gm,cp.gm);for(const[key,skill]of Object.entries(cp.gm.skillOverrides||{})){const[cls,slot]=key.split(':');if(D.CLS[cls]?.skills[slot])Object.assign(D.CLS[cls].skills[slot],skill);}}
     Object.assign(base,decode(cp.base)||{});guildTeams.push(...(cp.guildTeams||[]));lastMap=W.map;
     // A rollback restores live connections as well as entities; process startup has no members yet.
     for(const[pid,a]of members){const u=restoredPlayers.get(pid);if(!u)continue;a.unit=u;restoredPlayers.delete(pid);W.units.push(u);mode.team?.[u.team]?.push(u);}
@@ -199,6 +202,6 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
   }
   if(checkpoint)restore(checkpoint);
   return {G,desc,members,context,enter,action,tick,take,sync:pid=>{const a=members.get(pid);if(a)sync(a);},geometry,snapshot,checkpoint:saveCheckpoint,restore,
-    self(pid){return context(pid,a=>({st:a.unit.st,cds:Array.from(a.unit.cds),gcd:a.unit.gcd,runes:a.unit.runes,sets:a.unit.sets}));},
+    self(pid){return context(pid,a=>({st:a.unit.st,gm:Object.fromEntries(Object.entries(W.gm).filter(([,v])=>typeof v==='boolean'||typeof v==='number')),gmFlags:a.record.gmFlags||{},cds:Array.from(a.unit.cds),gcd:a.unit.gcd,runes:a.unit.runes,sets:a.unit.sets}));},
     leave(pid){const a=members.get(pid);if(!a)return;a.unit.dead=true;W.units=W.units.filter(u=>u!==a.unit&&u.owner!==a.unit);for(const team of mode.team||[]) {const i=team.indexOf(a.unit);if(i>=0)team.splice(i,1);}members.delete(pid);},get guilds(){return [...guildTeams];},get size(){return members.size;},get epoch(){return epoch;}};
 }
