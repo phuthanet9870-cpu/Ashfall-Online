@@ -185,3 +185,25 @@ test('GM skill edits broadcast shared rules to every participant and persist thr
  await f.send(a,{t:'online_gm',id:'rules-1',command:'skset',input:{panel:{gc:'guardian',gs:0},values:{gsp:5,gsc:2,gsr:2,gsR:3,gsn:1,gsd:1,gsv:1,gscc:''}}});await f.tick();
  assert.equal(f.last(b,'online_rules').rules['guardian:0'].p,5);const cp=w.checkpoint(),restored=createWorldRuntime(cp.desc,{checkpoint:cp});assert.equal(restored.G.D.CLS.guardian.skills[0].p,5);
 });
+
+test('original trade controls can unlock and request an offer without inventing the other player inventory',async()=>{
+ const f=fixture(),a=f.client('original-trade-a'),b=f.client('original-trade-b');await f.enter(a);await f.enter(b);const sb=f.service.sessions.get(b);await f.send(a,{t:'online_trade_request',target:sb.record.id});let t=f.last(a,'online_trade').trade;await f.send(b,{t:'online_trade_accept',trade:t.id});t=f.last(a,'online_trade').trade;
+ assert.equal(t.profiles[1].cls,sb.record.save.cls);assert.equal(t.offers[1].details.length,0);assert.equal(t.profiles[1].gold,undefined);assert.equal(t.profiles[1].inv,undefined);
+ for(const c of[a,b])await f.send(c,{t:'online_trade_lock',trade:t.id,version:t.version});await f.send(a,{t:'online_trade_unlock',trade:t.id,version:t.version,request:'unlock-req'});t=f.last(a,'online_trade').trade;assert.deepEqual(t.locked,[false,false]);assert.deepEqual(t.confirmed,[false,false]);assert.equal(f.last(a,'online_trade_command_result').request,'unlock-req');
+ await f.send(a,{t:'online_trade_suggest',trade:t.id,version:t.version,request:'suggest-req'});assert.match(f.last(b,'online_trade').trade.message,/เสนอไอเทมหรือทอง/);assert.deepEqual(f.last(a,'online_trade').trade.offers.map(o=>o.items),[[],[]]);
+});
+
+test('fashion offered from the original trade bag transfers once and worn fashion cannot be offered',async()=>{
+ const f=fixture(),a=f.client('fashion-trade-a'),b=f.client('fashion-trade-b');await f.enter(a);await f.enter(b);const sa=f.service.sessions.get(a),sb=f.service.sessions.get(b),fashion={uid:'fashion-original',kind:'fashion',slot:'f_head',tier:3,name:'Original Hat'},worn={uid:'fashion-worn',kind:'fashion',slot:'f_back',tier:4,name:'Worn Cape'};sa.record.save.fashion.owned=[fashion,worn];sa.record.save.fashion.eq={f_back:{...worn}};await f.service.flush();
+ await f.send(a,{t:'online_trade_request',target:sb.record.id});let t=f.last(a,'online_trade').trade;await f.send(b,{t:'online_trade_accept',trade:t.id});t=f.last(a,'online_trade').trade;
+ await f.send(a,{t:'online_trade_offer',trade:t.id,version:t.version,items:[worn.uid],gold:0});assert.equal(f.last(a,'online_error').error,'item_not_tradable');
+ await f.send(a,{t:'online_trade_offer',trade:t.id,version:t.version,items:[fashion.uid],gold:0});t=f.last(a,'online_trade').trade;assert.equal(f.last(b,'online_trade').trade.offers[0].details[0].uid,fashion.uid);
+ for(const c of[a,b])await f.send(c,{t:'online_trade_lock',trade:t.id,version:t.version});for(const c of[a,b])await f.send(c,{t:'online_trade_confirm',trade:t.id,version:t.version});assert.ok(!sa.record.save.fashion.owned.some(it=>it.uid===fashion.uid));assert.equal(sb.record.save.fashion.owned.filter(it=>it.uid===fashion.uid).length,1);assert.ok(!sb.record.save.inv.some(it=>it.uid===fashion.uid));assert.ok(sa.record.save.fashion.owned.some(it=>it.uid===worn.uid));
+});
+
+test('original dungeon result window receives its server reward model and only that player collected loot',async()=>{
+ const f=fixture(),a=f.client('result-window-a'),b=f.client('result-window-b');await f.enter(a,{kind:'dungeon',id:'armory',floor:1});await f.enter(b,{kind:'dungeon',id:'armory',floor:1});const sa=f.service.sessions.get(a),sb=f.service.sessions.get(b),w=sa.world.sim;
+ for(const[session,uid]of[[sa,'result-loot-a'],[sb,'result-loot-b']]){const u=w.members.get(session.record.id).unit;w.G.W.loots.push({id:uid,x:u.x,y:u.y,item:{uid,kind:'gem',tier:1,name:uid},created:0});assert.equal(w.take(session.record.id,uid),true);}
+ w.G.W.mode.endRun('exit');
+ for(const[c,uid,foreign]of[[a,'result-loot-a','result-loot-b'],[b,'result-loot-b','result-loot-a']]){const message=f.out.get(c).filter(m=>m.t==='online_event'&&m.event.t==='dungeon_result').at(-1);assert.equal(message.room,sa.world.key);const result=message.event;assert.equal(result.result.F,1);assert.ok(Array.isArray(result.result.dist));assert.ok(Array.isArray(result.result.items));assert.deepEqual(result.run.got.map(it=>it.uid),[uid]);assert.ok(!JSON.stringify(result).includes(foreign));assert.equal(result.run.got[0]._collector,undefined);}
+});

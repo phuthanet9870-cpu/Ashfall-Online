@@ -11,15 +11,19 @@ const assert=require('node:assert/strict');const{chromium}=require('playwright')
   await pages[0].evaluate(()=>G.SHARED_WORLD.command('buy',[0,1]));assert.equal(await pages[0].evaluate(()=>G.S.save.gold),9960);
   const target=await pages[1].evaluate(()=>G.SHARED_WORLD.playerId);
   await pages[0].evaluate(target=>ASHFALL_NET.send({t:'online_trade_request',target}),target);
-  await pages[1].waitForSelector('[data-act="ot-accept"]');await pages[1].click('[data-act="ot-accept"]');
-  for(const p of pages)await p.waitForSelector('[data-act="ot-add"]');
-  await pages[0].click(`[data-act="ot-add"][data-uid="browser-0-${suffix}"]`);
+  await pages[1].waitForSelector('[data-act="t-reqyes"]');await pages[1].click('[data-act="t-reqyes"]');
+  for(const p of pages)await p.waitForSelector('[data-act="t-add"][data-who="me"]');
+  await pages[0].click(`[data-act="t-add"][data-uid="browser-0-${suffix}"]`);
   await pages[1].waitForFunction(uid=>G.UI.onlineTrade?.offers[0].items.includes(uid),'browser-0-'+suffix);
-  await pages[1].click(`[data-act="ot-add"][data-uid="browser-1-${suffix}"]`);
+  await pages[1].click(`[data-act="t-add"][data-uid="browser-1-${suffix}"]`);
   await pages[0].waitForFunction(uid=>G.UI.onlineTrade?.offers[1].items.includes(uid),'browser-1-'+suffix);
-  await pages[0].click('[data-act="ot-lock"]');await pages[1].click('[data-act="ot-lock"]');
-  for(const p of pages)await p.waitForFunction(()=>!document.querySelector('[data-act="ot-confirm"]')?.disabled);
-  await pages[0].click('[data-act="ot-confirm"]');await pages[1].click('[data-act="ot-confirm"]');
+  await pages[0].fill('#tgme','100');await pages[0].press('#tgme','Tab');await pages[1].waitForFunction(()=>G.UI.onlineTrade.offers[0].gold===100);await pages[0].fill('#tgme','0');await pages[0].press('#tgme','Tab');await pages[1].waitForFunction(()=>G.UI.onlineTrade.offers[0].gold===0);
+  for(const p of pages){assert.deepEqual(await p.evaluate(()=>G.UI.PANELS.trade.tabs.map(t=>t[0])),['deal','near','hist']);assert.equal(await p.locator('.tside').count(),2);assert.equal(await p.locator('.tslots .icell').count(),16);assert.equal(await p.locator('#authority-status,[data-p="multiplayer"]').count(),0);}
+  await pages[0].screenshot({path:'/tmp/ashfall-restored-trade.png'});
+  await pages[0].click('[data-act="t-lock"]');await pages[0].waitForSelector('[data-act="t-unlock"]');await pages[0].click('[data-act="t-unlock"]');await pages[0].waitForFunction(()=>G.UI.onlineTrade.locked.every(x=>!x));
+  await pages[0].click('[data-act="t-lock"]');await pages[1].click('[data-act="t-lock"]');
+  for(const p of pages)await p.waitForFunction(()=>{const button=document.querySelector('[data-act="t-confirm"]');return button&&!button.disabled;});
+  await pages[0].click('[data-act="t-confirm"]');await pages[1].click('[data-act="t-confirm"]');
   await pages[0].waitForFunction(uid=>G.S.save.inv.some(it=>it.uid===uid),'browser-1-'+suffix);await pages[1].waitForFunction(uid=>G.S.save.inv.some(it=>it.uid===uid),'browser-0-'+suffix);
   console.log('PASS browser: one-time migration, purchase, real two-party trade UI');
   for(const mode of ['farm','dungeon','wbarena','pvp']){

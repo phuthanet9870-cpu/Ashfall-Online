@@ -12,10 +12,11 @@
   const MAX_SLOTS = 8;
   const val = it => Math.round(S.itemPrice(it) * (1 + (it.lv || 0) * 0.15) * (it.set ? 1.3 : 1) * (it.affix ? 1.6 : 1) * (it.core ? 1.5 : 1));
   const tradable = it => S.isEquip(it) || it.kind === 'rune' || it.kind === 'gem' || it.kind === 'fpack';
-  const myFash = () => { const s = S.save; const eq = new Set(Object.values(s.fashion.eq).filter(Boolean)); return s.fashion.owned.filter(it => !eq.has(it) && !it.lock); };
+  const myFash = () => { const s = S.save; const eq = new Set(Object.values(s.fashion.eq).filter(Boolean).map(it=>it.uid)); return s.fashion.owned.filter(it => !eq.has(it.uid) && !it.lock); };
 
   // trader profile for a simulated player (lazy, persists for the session)
   S.traderOf = (u) => {
+    if (G.SHARED_WORLD?.active && u.pid) return {name:u.name,cls:u.cls||u.look?.cls||'blademaster',lvl:u.lvl,gold:0,inv:[],persona:'fair',wants:'gear',mood:1,online:true};
     if (u.trader) return u.trader; const s = S.save; const pk = U.pick(Object.keys(PERSONAS)); const lvl = U.clamp(s.lvl + U.ri(-25, 25), 1, D.MAX_LV);
     const baseT = U.clamp(Math.ceil(lvl / 22), 1, 9); const inv = [];
     if (Math.random() < 0.5) inv.push(S.genItem('fashion', U.clamp(baseT + U.ri(-1, 2), 1, 10), 1));
@@ -23,11 +24,11 @@
     u.trader = { name: u.name, cls: u.cls || (u.look && u.look.cls) || U.pick(D.CLASSES).id, lvl, gold: Math.round(2000 + lvl * lvl * U.rf(2, 8)), inv, persona: pk, wants: U.pick(['gear', 'acc', 'rune', 'gem', 'relic']), mood: 1 };
     return u.trader;
   };
-  const sims = () => W.units.filter(u => u.sim && !u.dead);
+  const sims = () => W.units.filter(u => !u.dead && (G.SHARED_WORLD?.active ? u.pid && u.pid!==G.SHARED_WORLD.playerId : u.sim));
 
   // ---------- evaluation ----------
   const offerVal = (side, T) => side.items.reduce((a, it) => a + val(it) * (T && T.persona === 'collector' && it.kind === T.wants ? 1.4 : 1) * (T && it.kind === T.wants ? 1.15 : 1), 0) + side.gold;
-  const evalTrade = (X) => { const T = X.T, P = PERSONAS[T.persona]; const give = offerVal(X.me, T); const take = X.them.items.reduce((a, it) => a + val(it), 0) + X.them.gold; const need = Math.ceil(take * P.greed * (2 - T.mood)); return { give, take, need, ok: give >= need, short: Math.max(0, need - give) }; };
+  const evalTrade = (X) => { if(X.online)return {give:offerVal(X.me,null),take:offerVal(X.them,null),need:offerVal(X.them,null),ok:X.myLock&&X.theirLock,short:0}; const T = X.T, P = PERSONAS[T.persona]; const give = offerVal(X.me, T); const take = X.them.items.reduce((a, it) => a + val(it), 0) + X.them.gold; const need = Math.ceil(take * P.greed * (2 - T.mood)); return { give, take, need, ok: give >= need, short: Math.max(0, need - give) }; };
 
   // ---------- open / close ----------
   UI.startTrade = (u, incoming) => {
@@ -35,30 +36,30 @@
     const T = S.traderOf(u); UI.trade = { u, T, me: { items: [], gold: 0 }, them: { items: [], gold: 0 }, myLock: false, theirLock: false, msg: incoming ? `${T.name}: อยากแลกของกันไหม?` : `${T.name}: ว่าไง จะแลกอะไร?`, log: [] };
     UI.openPanel('trade');
   };
-  UI.tradeRequest = (u) => { if (!$('#modal').hidden || !$('#panel').hidden) return; const T = S.traderOf(u); UI._treq = u;
-    UI.modal(`<h2>คำขอเทรด</h2><div class="treq"><img src="${UI.bodyURL(T.cls)}" alt=""><div><b>${esc(T.name)}</b> <small>Lv${T.lvl} ${esc(D.CLS[T.cls].name)} · นิสัย${PERSONAS[T.persona].th}</small><p>ขอเทรดกับคุณ · กำลังมองหา <b>${({ gear: 'เกียร์', acc: 'เครื่องประดับ', rune: 'รูน', gem: 'เจม', relic: 'Relic' })[T.wants]}</b></p></div></div><div class="list"><button class="btn primary" data-act="t-reqyes">เปิดหน้าต่างเทรด</button><button class="btn" data-act="t-reqno">ปฏิเสธ</button></div>`); };
+  UI.tradeRequest = (u, force=false) => { if (!force&&(!$('#modal').hidden || !$('#panel').hidden)) return; const T = S.traderOf(u); UI._treq = u;
+    UI.modal(`<h2>คำขอเทรด</h2><div class="treq"><img src="${UI.bodyURL(T.cls)}" alt=""><div><b>${esc(T.name)}</b> <small>Lv${T.lvl} ${esc(D.CLS[T.cls].name)}${T.online?' · ออนไลน์':' · นิสัย'+PERSONAS[T.persona].th}</small><p>ขอเทรดกับคุณ${T.online?'':' · กำลังมองหา <b>'+({ gear: 'เกียร์', acc: 'เครื่องประดับ', rune: 'รูน', gem: 'เจม', relic: 'Relic' })[T.wants]+'</b>'}</p></div></div><div class="list"><button class="btn primary" data-act="t-reqyes">เปิดหน้าต่างเทรด</button><button class="btn" data-act="t-reqno">ปฏิเสธ</button></div>`); };
 
   // ---------- trade panel ----------
   const slots = (side, who, X) => { const cells = side.items.map((it, i) => `<button class="icell t${it.tier}" data-act="t-rm" data-who="${who}" data-i="${i}" title="${esc(it.name)} · ${U.fmt(val(it))}">${`<img src="${UI.itemIcon(it)}" alt="">`}${it.lv ? `<span class="ip">+${it.lv}</span>` : ''}</button>`); while (cells.length < MAX_SLOTS) cells.push('<div class="icell empty"></div>'); return `<div class="tslots">${cells.join('')}</div>`; };
   const side = (title, sideObj, who, X, img, sub, locked) => `<div class="tside ${locked ? 'locked' : ''}"><div class="thead"><img src="${img}" alt=""><div><b>${esc(title)}</b><small>${sub}</small></div>${locked ? '<span class="tlock">🔒 ล็อกแล้ว</span>' : ''}</div>${slots(sideObj, who, X)}
-    <div class="tgold"><img src="${UI.curIcon('gold')}" alt="">${who === 'me' ? `<input type="number" id="tgme" min="0" step="100" value="${sideObj.gold}" ${X.myLock ? 'disabled' : ''}>` : `<input type="number" id="tgthem" min="0" step="100" value="${sideObj.gold}" ${X.myLock ? 'disabled' : ''} title="ขอทองจากอีกฝ่าย">`}<small>${who === 'me' ? `มี ${U.fmt(S.save.gold)}` : `ขอทอง (เขามี ${U.fmt(X.T.gold)})`}</small></div>
+    <div class="tgold"><img src="${UI.curIcon('gold')}" alt="">${who === 'me' ? `<input type="number" id="tgme" min="0" step="100" value="${sideObj.gold}" ${X.myLock ? 'disabled' : ''}>` : `<input type="number" id="tgthem" min="0" step="100" value="${sideObj.gold}" ${X.myLock||X.online ? 'disabled' : ''} title="ขอทองจากอีกฝ่าย">`}<small>${who === 'me' ? `มี ${U.fmt(S.save.gold)}` : (X.online?'ทองที่อีกฝ่ายเสนอ':`ขอทอง (เขามี ${U.fmt(X.T.gold)})`)}</small></div>
     <div class="tval">มูลค่ารวม ≈ <b>${U.fmt(who === 'me' ? offerVal(sideObj, null) : offerVal(sideObj, null))}</b></div></div>`;
   UI.PANELS.trade = { title: 'เทรดกับผู้เล่น', tabs: [['deal', 'หน้าต่างเทรด'], ['near', 'ผู้เล่นใกล้เคียง'], ['hist', 'ประวัติเทรด']], render(tab, P) {
     const s = S.save; const X = UI.trade;
-    if (tab === 'near' || (!X && tab === 'deal')) { const L = sims(); return `<p class="muted">เทรดได้เฉพาะในเมือง · คลิกผู้เล่นในแผนที่หรือเลือกจากรายการ · ผู้เล่นแต่ละคนมีนิสัยและของในกระเป๋าต่างกัน</p>${W.mode && W.mode.kind === 'town' ? '' : '<p class="bad">ตอนนี้ไม่ได้อยู่ในเมือง</p>'}<div class="tnear">${L.map(u => { const T = S.traderOf(u); return `<div class="tnc"><img src="${UI.bodyURL(T.cls)}" alt=""><div><b>${esc(T.name)}</b><small>Lv${T.lvl} ${esc(D.CLS[T.cls].name)}</small><small>นิสัย${PERSONAS[T.persona].th} · ของ ${T.inv.length} ชิ้น</small></div><button class="btn primary" data-act="t-open" data-id="${u.id}">เทรด</button></div>`; }).join('') || '<p class="muted">ไม่มีผู้เล่นอยู่ใกล้</p>'}</div>`; }
+    if (tab === 'near' || (!X && tab === 'deal')) { const L = sims(); return `<p class="muted">เทรดได้เฉพาะในเมือง · คลิกผู้เล่นในแผนที่หรือเลือกจากรายการ · ${G.SHARED_WORLD?.active?'ผู้เล่นจริงในแผนที่เดียวกัน':'ผู้เล่นแต่ละคนมีนิสัยและของในกระเป๋าต่างกัน'}</p>${W.mode && W.mode.kind === 'town' ? '' : '<p class="bad">ตอนนี้ไม่ได้อยู่ในเมือง</p>'}<div class="tnear">${L.map(u => { const T = S.traderOf(u); return `<div class="tnc"><img src="${UI.bodyURL(T.cls)}" alt=""><div><b>${esc(T.name)}</b><small>Lv${T.lvl} ${esc(D.CLS[T.cls].name)}</small><small>${T.online?'ออนไลน์':'นิสัย'+PERSONAS[T.persona].th+' · ของ '+T.inv.length+' ชิ้น'}</small></div><button class="btn primary" data-act="t-open" data-id="${u.id}">เทรด</button></div>`; }).join('') || '<p class="muted">ไม่มีผู้เล่นอยู่ใกล้</p>'}</div>`; }
     if (tab === 'hist') { const H = s.tradeLog || []; return `<table class="tbl"><tr><th>เวลา</th><th>กับ</th><th>ให้ไป</th><th>ได้รับ</th></tr>${H.map(h => `<tr><td class="nowrap">${new Date(h.t).toLocaleString('th-TH')}</td><td>${esc(h.who)}</td><td>${h.gave.map(n => esc(n)).join(', ') || '-'}${h.gg ? ` +${U.fmt(h.gg)} ทอง` : ''}</td><td>${h.got.map(n => esc(n)).join(', ') || '-'}${h.tg ? ` +${U.fmt(h.tg)} ทอง` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">ยังไม่มีการเทรด</td></tr>'}</table>`; }
-    const T = X.T; const ev = evalTrade(X); const mine = s.inv.filter(tradable).concat(myFash()).filter(it => !it.lock && !X.me.items.includes(it)); const theirs = T.inv.filter(it => !X.them.items.includes(it));
+    const T = X.T; const ev = evalTrade(X); const mine = s.inv.filter(tradable).concat(myFash()).filter(it => !it.lock && !X.me.items.some(offered=>offered.uid===it.uid)); const theirs = T.inv.filter(it => !X.them.items.includes(it));
     const P2 = PERSONAS[T.persona];
     return `<div class="tradepage"><div class="tmain">${side(s.name + ' (คุณ)', X.me, 'me', X, UI.bodyURL(s.cls, s.fashion.eq), `Lv${s.lvl} ${esc(D.CLS[s.cls].name)}`, X.myLock)}
-      <div class="tmid"><div class="tarrow">⇄</div><div class="tmood"><small>ความพอใจของ ${esc(T.name)}</small><div class="tbar"><i style="width:${Math.min(100, ev.need ? ev.give / ev.need * 100 : 100)}%" class="${ev.ok ? 'ok' : ''}"></i></div><small>${ev.ok ? 'พอใจ' : ev.need ? `ขาดอีก ≈ ${U.fmt(ev.short)}` : 'ยังไม่มีข้อเสนอ'}</small></div>
+      <div class="tmid"><div class="tarrow">⇄</div><div class="tmood"><small>${X.online?'สถานะข้อเสนอของ':'ความพอใจของ'} ${esc(T.name)}</small><div class="tbar"><i style="width:${X.online?(Number(X.myLock)+Number(X.theirLock))*50:Math.min(100, ev.need ? ev.give / ev.need * 100 : 100)}%" class="${ev.ok ? 'ok' : ''}"></i></div><small>${X.online?(X.myLock&&X.theirLock?'ทั้งสองฝ่ายล็อกแล้ว':'รอทั้งสองฝ่ายล็อกข้อเสนอ'):(ev.ok ? 'พอใจ' : ev.need ? `ขาดอีก ≈ ${U.fmt(ev.short)}` : 'ยังไม่มีข้อเสนอ')}</small></div>
         <div class="tmsg">💬 ${esc(X.msg)}</div>
-        ${X.myLock && X.theirLock ? '<button class="btn primary big" data-act="t-confirm">✔ ยืนยันเทรด</button>' : X.myLock ? '<button class="btn" data-act="t-unlock">ปลดล็อก / แก้ข้อเสนอ</button>' : '<button class="btn primary big" data-act="t-lock">🔒 ล็อกข้อเสนอ</button>'}
+        ${X.myLock && X.theirLock ? `<button class="btn primary big" data-act="t-confirm" ${X.myConfirmed?'disabled':''}>${X.myConfirmed?'ยืนยันแล้ว รออีกฝ่าย':'✔ ยืนยันเทรด'}</button>` : X.myLock ? '<button class="btn" data-act="t-unlock">ปลดล็อก / แก้ข้อเสนอ</button>' : '<button class="btn primary big" data-act="t-lock">🔒 ล็อกข้อเสนอ</button>'}
         <div class="list"><button class="mini-btn" data-act="t-ask">ขอให้เขาเสนอราคา</button><button class="mini-btn" data-act="t-cancel">ยกเลิกเทรด</button></div></div>
-      ${side(T.name, X.them, 'them', X, UI.bodyURL(T.cls), `Lv${T.lvl} ${esc(D.CLS[T.cls].name)} · นิสัย${P2.th} · อยากได้${({ gear: 'เกียร์', acc: 'เครื่องประดับ', rune: 'รูน', gem: 'เจม', relic: 'Relic' })[T.wants]}`, X.theirLock)}</div>
+      ${side(T.name, X.them, 'them', X, UI.bodyURL(T.cls), `Lv${T.lvl} ${esc(D.CLS[T.cls].name)}${X.online?' · ออนไลน์':' · นิสัย'+P2.th+' · อยากได้'+({ gear: 'เกียร์', acc: 'เครื่องประดับ', rune: 'รูน', gem: 'เจม', relic: 'Relic' })[T.wants]}`, X.theirLock)}</div>
       <div class="tinvs"><div><h4>กระเป๋าของคุณ (คลิกเพื่อใส่ในข้อเสนอ)</h4><div class="igrid">${mine.map(it => `<button class="icell t${it.tier}" data-act="t-add" data-who="me" data-uid="${it.uid}" title="${esc(it.name)} · มูลค่า ${U.fmt(val(it))}"><img src="${UI.itemIcon(it)}" alt="">${it.lv ? `<span class="ip">+${it.lv}</span>` : ''}<span class="ilv">${it.ilv || ''}</span></button>`).join('') || '<span class="muted">ไม่มีของที่เทรดได้ (ของที่ล็อกเทรดไม่ได้)</span>'}</div></div>
-        <div><h4>ของของ ${esc(T.name)} (คลิกเพื่อขอ)</h4><div class="igrid">${theirs.map(it => `<button class="icell t${it.tier}" data-act="t-add" data-who="them" data-uid="${it.uid}" title="${esc(it.name)} · มูลค่า ${U.fmt(val(it))}"><img src="${UI.itemIcon(it)}" alt="">${it.lv ? `<span class="ip">+${it.lv}</span>` : ''}<span class="ilv">${it.ilv || ''}</span></button>`).join('') || '<span class="muted">ไม่มีของเหลือ</span>'}</div>
+        <div><h4>ของของ ${esc(T.name)} (คลิกเพื่อขอ)</h4><div class="igrid">${theirs.map(it => `<button class="icell t${it.tier}" data-act="t-add" data-who="them" data-uid="${it.uid}" title="${esc(it.name)} · มูลค่า ${U.fmt(val(it))}"><img src="${UI.itemIcon(it)}" alt="">${it.lv ? `<span class="ip">+${it.lv}</span>` : ''}<span class="ilv">${it.ilv || ''}</span></button>`).join('') || (X.online?'<span class="muted">ไอเทมที่อีกฝ่ายเสนอจะแสดงในช่องด้านบน</span>':'<span class="muted">ไม่มีของเหลือ</span>')}</div>
         ${X.hover ? '' : ''}</div></div></div>`;
-  }, after(P) { const X = UI.trade; if (!X) return; const a = $('#tgme'), b = $('#tgthem'); if (a) a.onchange = () => { X.me.gold = U.clamp(Math.floor(+a.value || 0), 0, S.save.gold); unlock(X); UI.renderPanel(); }; if (b) b.onchange = () => { X.them.gold = U.clamp(Math.floor(+b.value || 0), 0, X.T.gold); unlock(X); UI.renderPanel(); }; } };
+  }, after(P) { const X = UI.trade; if (!X) return; if(X.online)return UI.onlineTradeAfter?.(X); const a = $('#tgme'), b = $('#tgthem'); if (a) a.onchange = () => { X.me.gold = U.clamp(Math.floor(+a.value || 0), 0, S.save.gold); unlock(X); UI.renderPanel(); }; if (b) b.onchange = () => { X.them.gold = U.clamp(Math.floor(+b.value || 0), 0, X.T.gold); unlock(X); UI.renderPanel(); }; } };
   const unlock = X => { if (X.myLock || X.theirLock) X.msg = `${X.T.name}: แก้ข้อเสนอใหม่เหรอ งั้นปลดล็อกก่อนนะ`; X.myLock = false; X.theirLock = false; };
 
   // ---------- actions ----------
@@ -97,7 +98,7 @@
   // click a simulated player in the world → trade request menu
   const canvas = document.getElementById('cv');
   canvas.addEventListener('click', ev => { if (!W.player || !W.map || !UI.unitAt) return; const r = canvas.getBoundingClientRect(); const sx = (ev.clientX - r.left) / r.width * E.VW, sy = (ev.clientY - r.top) / r.height * E.VH; const t = UI.unitAt(sx, sy); if (t && t.sim) { const T = S.traderOf(t);
-    UI._treq = t; UI.modal(`<h2>${esc(T.name)}</h2><div class="treq"><img src="${UI.bodyURL(T.cls)}" alt=""><div><small>Lv${T.lvl} ${esc(D.CLS[T.cls].name)} · นิสัย${PERSONAS[T.persona].th}</small><p>ต้องการทำอะไร?</p></div></div><div class="list"><button class="btn primary" data-act="t-reqyes">ขอเทรด</button><button class="btn" data-act="t-reqno">ปิด</button></div>`); } });
+    UI._treq = t; UI.modal(`<h2>${esc(T.name)}</h2><div class="treq"><img src="${UI.bodyURL(T.cls)}" alt=""><div><small>Lv${T.lvl} ${esc(D.CLS[T.cls].name)}${T.online?' · ออนไลน์':' · นิสัย'+PERSONAS[T.persona].th}</small><p>ต้องการทำอะไร?</p></div></div><div class="list"><button class="btn primary" data-act="t-reqyes">ขอเทรด</button><button class="btn" data-act="t-reqno">ปิด</button></div>`); } });
 
   // incoming trade requests while idle in town
   let reqT = U.rf(90, 180);

@@ -5,19 +5,23 @@
   const {W,E,S,D,U,UI,VFX:V,SPR}=G;
   const SW=G.SHARED_WORLD={active:false,ready:false,room:'',playerId:'',revision:-1,characterRevision:0};
   const nativeEnter=S.enter,nativePersist=S.persist,nativeRefresh=S.refreshPlayer;
-  let lastSettings='',settingsTimer=null,lastCache=0,lastGear='',lastPanel='';let wanted=null,request='',currentMap=null,currentCharacter='',nextJoin=0,intent=null,moving=false,lastIntent=0,lastPotion=0,applying=false,official=null,commandChain=Promise.resolve();
+  let lastSettings='',settingsTimer=null,lastCache=0,lastGear='',lastPanel='';let wanted=null,request='',currentMap=null,currentCharacter='',currentServer='',nextJoin=0,intent=null,moving=false,lastIntent=0,lastPotion=0,applying=false,official=null,commandChain=Promise.resolve();
   const entities=new Map(),pickups=new Map(),pending=new Map();
   const send=o=>{if(NET.connected)NET.send(o);};
   function charId(){if(!S.save)return '';if(!S.save._worldCharacter){S.save._worldCharacter=crypto.randomUUID();nativePersist();}return S.save._worldCharacter;}
   function descriptor(mode){switch(mode.kind){case 'town':return{kind:'town',id:'aurelion'};case 'farm':return{kind:'farm',id:mode.def.id};case 'dungeon':return{kind:'dungeon',id:mode.dg.id,floor:mode.startFloor||mode.floor,instance:'public'};case 'wbarena':return{kind:'wbarena',id:'wbarena'};case 'pvp':return{kind:'pvp',id:mode.cfg.mode,map:mode.cfg.map,size:mode.cfg.size,normalized:mode.cfg.normalized};case 'siege':return{kind:'siege',size:mode.cfg.size};default:return null;}}
+  function siegeView(mode){const team=W.player?.team||0,R=mode.R||mode.roles(),view={...mode};for(const key of ['pool','hold','tickets','kills'])if(mode[key])view[key]=team?[mode[key][1],mode[key][0]]:mode[key];view.line=team?-mode.line:mode.line;view.R={...R,att:R.att<0?R.att:R.att^team,def:R.def<0?R.def:R.def^team};view.roles=()=>view.R;return view;}
+  const prepTick=UI.siegePrepTick;UI.siegePrepTick=mode=>prepTick(SW.active&&mode.kind==='siege'?siegeView(mode):mode);
   S.enter=mode=>{if(SW.ready)send({t:'online_leave'});wanted=descriptor(mode);SW.active=!!wanted;SW.ready=false;request=crypto.randomUUID();currentMap=null;
     if(!wanted)return nativeEnter(mode);
+    if(mode.kind==='siege'){const hud=mode.hud;mode.hud=function(){return hud.call(siegeView(this));};}
     const init=mode.init;mode.init=()=>{const m=W.map;mode.portals=[];if(mode.kind==='siege')Object.assign(mode,{hold:[0,0],tickets:[0,0],R:mode.roles(),throne:0,structs:[],respawn:[]});if(mode.kind==='town')mode.portals=(m.warps||[]).map(w=>({x:w.x,y:w.y,step:true,use:()=>w.to==='wb'?S.goWorldBoss(false):w.to==='dg'?UI.openPanel('dungeon'):S.goFarm(w.to)}));else if(['farm','wbarena'].includes(mode.kind)&&m.portalPt)mode.portals=[{...m.portalPt,step:true,use:()=>S.goTown('aurelion')}];};
     try{return nativeEnter(mode);}finally{mode.init=init;}
   };
   function poll(){
     if(!W.map||!W.player||!wanted){if(SW.ready)send({t:'online_leave'});SW.active=SW.ready=false;return;}
     SW.active=true;const id=charId(),server=globalThis.ASHFALL_STORAGE.getItem('ashfall_server')||'s1';
+    if(currentServer!==server){currentServer=server;if(SW.ready)send({t:'online_leave'});SW.ready=false;request=crypto.randomUUID();currentMap=null;nextJoin=0;}
     if(currentCharacter!==id){official=null;SW.characterRevision=0;}
     if(currentCharacter!==id||currentMap!==W.map&&SW.ready===false){currentMap=W.map;currentCharacter=id;entities.clear();pickups.clear();SW.revision=-1;SW._effects=new Set();nextJoin=0;W.units=W.units.filter(u=>u===W.player);W.loots=[];W.timers=[];}
     if(!NET.connected||!NET.authed){SW.ready=false;return;}
@@ -58,12 +62,12 @@
       if(oldHp>q.hp&&!q.dead&&E.vis(q.x,q.y)){u.flash=.1;V.text(q.x,q.y,U.fmt(oldHp-q.hp),me?'#ff5a5a':'#ffffff',{size:8});}
       if(me&&m.self){if(m.self.gm)Object.assign(W.gm,m.self.gm,m.self.gmFlags);u.st=m.self.st;u.cds=Float32Array.from(m.self.cds);u.gcd=m.self.gcd;u.runes=m.self.runes;u.sets=m.self.sets;}
     }
-    for(const id of entities.keys())if(!seen.has(id))entities.delete(id);W.units=[...entities.values()];
+    for(const id of entities.keys())if(!seen.has(id))entities.delete(id);W.units=[...entities.values()];if(['pvp','siege'].includes(state.kind))W.mode.team=[W.units.filter(u=>u.pid&&u.team===0),W.units.filter(u=>u.pid&&u.team===1)];
     for(const q of SW._unitStates.values())if(q.damage){const unit=entities.get(q.id);unit.wbDmg=new Map(q.damage.map(([id,n])=>[entities.get(id),n]).filter(([u])=>u));}
+    if(state.kind==='pvp')W.mode.boss=entities.get(state.mode.bossId)||null;
     if(state.kind==='wbarena')W.mode.boss=W.units.find(u=>u.isWB&&!u.dead)||null;
     W.loots=state.loots.map(l=>({...l,_shared:true}));W.dangers=state.dangers;Object.assign(W.mode,state.mode);W.time=state.time;
-    if(['pvp','siege'].includes(state.kind))W.mode.hud=()=>{const mode=W.mode;return `<b>${state.kind==='pvp'?'PvP':'กิลด์วอร์'} · คุณอยู่ฝ่าย ${W.player.team+1}</b> · ${mode.waiting?'รอฝ่ายตรงข้าม':mode.over?'จบการแข่งขัน':mode.phase==='prep'?'เตรียมตัว '+Math.ceil(mode.prepT)+' วิ':'กำลังต่อสู้'}<br>${mode.score?'คะแนน '+mode.score.map(n=>Math.floor(n)).join(' : '):'รอบ '+mode.round+' · แนวรบ '+mode.line+' · ตั๋ว '+(mode.tickets||[]).join(' : ')}`;};
-    if(state.kind==='siege'&&SW._siegePhase!==state.mode.phase){SW._siegePhase=state.mode.phase;const my=W.player.team,view={...W.mode,pool:[W.mode.pool[my],W.mode.pool[1-my]]};UI.siegePrep?.(view,state.mode.phase==='prep');}
+    if(state.kind==='siege'){W.mode.gate=entities.get(state.mode.gateId)||null;W.mode.inner=entities.get(state.mode.innerId)||null;if(SW._siegePhase!==state.mode.phase){SW._siegePhase=state.mode.phase;UI.siegePrep?.(siegeView(W.mode),state.mode.phase==='prep');}}
     if(state.portals&&['dungeon'].includes(state.kind))W.mode.portals=state.portals.map((p,index)=>({...p,use:()=>send({t:'online_action',action:'portal',index})}));
     if(state.kind==='dungeon')W.mode.portal=W.mode.portals.find(p=>!p.exit)||null;
     W.projs=state.projs.map(p=>({...p,pal:p.pal||D.ELEM[p.elem||'phys'].pal,hist:[],trail:0,scale:1}));
@@ -87,7 +91,13 @@
     }finally{applying=false;}
   });
   NET.on('online_pickup_result',m=>pickups.delete(m.id));
-  NET.on('online_event',m=>{const e=m.event;if(e.t==='toast')UI.toast(...e.args);else if(e.t==='announce')UI.announce(...e.args);else if(e.t==='match_result'||e.t==='dungeon_result'){UI.announce(e.t==='match_result'?(e.winner===e.team?'ชนะการแข่งขัน':'จบการแข่งขัน'):'จบดันเจี้ยน','รางวัลบันทึกบนเซิร์ฟเวอร์แล้ว');}});
+  NET.on('online_event',m=>{const e=m.event;if((e.t==='match_result'||e.t==='dungeon_result')&&(!SW.ready||m.room&&m.room!==SW.room))return;if(e.t==='toast')UI.toast(...e.args);else if(e.t==='announce')UI.announce(...e.args);else if(e.t==='dungeon_result'&&e.result&&W.mode.kind==='dungeon'){Object.assign(W.mode,{ended:true,full:e.full,run:e.run});UI.dungeonResult(W.mode,e.result,e.reason);}
+    else if(e.t==='match_result'&&e.result&&W.mode.kind===e.kind){
+      const team=e.team,players=(e.stats||[]).map(data=>{const unit=entities.get(data.id)||W.units.find(u=>u.pid===data.pid);if(!unit)return null;Object.assign(unit,data);unit.ms={k:0,d:0,a:0,dmg:0,heal:0,obj:0,streak:0,...data.ms};return unit;}).filter(Boolean),teams=[players.filter(u=>u.team===team),players.filter(u=>u.team!==team)],best=(list,key)=>list.reduce((a,u)=>(u.ms[key]||0)>(a.ms[key]||0)?u:a,list[0]||W.player);
+      const result={...e.result,mvp:{dmg:best(e.kind==='siege'?teams[0]:players,'dmg'),heal:best(e.kind==='siege'?teams[0]:players,'heal'),obj:best(e.kind==='siege'?teams[0]:players,'obj')},score:u=>u.ms.dmg/1000+u.ms.heal/800+u.ms.k*3+u.ms.obj*5-u.ms.d};W.mode.over=true;
+      if(e.kind==='pvp')UI.pvpResult({...W.mode,online:true,team:teams},e.winner===team?0:1,result);
+      else {UI.siegePrep(W.mode,false);const view=siegeView(W.mode);view.team=teams;view.cfg={...W.mode.cfg,rival:{...W.mode.cfg.rival,name:W.mode.teamNames?.[1-team]||W.mode.cfg.rival.name}};view.history=(e.history||[]).map(h=>({...h,w:h.w===team?0:1,line:team?-h.line:h.line,ci:h.ci??(h.round===1?0:Math.min(D.CASTLES.length,Math.abs(h.line-(h.w===0?1:-1))+1))}));const save=S.save;try{S.save={...save,guild:{...save.guild,rating:result.rating??save.guild.rating}};UI.siegeResult(view,result);}finally{S.save=save;}}
+    }});
   NET.on('online_command_result',m=>{const p=pending.get(m.id);if(p){clearTimeout(p.timer);pending.delete(m.id);p.resolve(m.result);}});
   SW.command=(command,args=[])=>{commandChain=commandChain.catch(()=>{}).then(()=>new Promise((resolve,reject)=>{if(!SW.ready)return reject(new Error('world_not_ready'));const id=crypto.randomUUID(),timer=setTimeout(()=>{pending.delete(id);reject(new Error('command_timeout'));},20000);const resend=()=>send({t:'online_command',id,revision:SW.characterRevision,command,args});pending.set(id,{resolve,reject,timer,resend,retries:0});resend();}));return commandChain;};
   const command=(name,args)=>{SW.command(name,args).then(r=>{if(name==='gacha'&&r?.rolls)UI.gachaReveal?.(r.rolls.map(row=>({...row,img:row.it?UI.itemIcon(row.it):row.petKey?UI.petIcon(row.petKey):''})),args[0]);if(r?.msg)UI.toast(r.msg,r.ok===false?'bad':'good');}).catch(e=>UI.toast(e.message,'bad'));};
@@ -125,7 +135,5 @@
     if(direct[a]){command(...direct[a]);return;}
     if(['x-sellsel','x-sellall','x-autosell','sellall'].includes(a)){const selected=s.inv.filter(it=>!it.lock&&(a==='x-sellall'||a==='x-autosell'||a==='sellall'?a!=='sellall'||it.tier<=2:(s.settings.sellT||[]).includes(it.tier)&&(s.settings.sellK||[]).includes(it.kind)));command('sellMany',[selected.map(it=>it.uid)]);return;}
     const result=act(el,e);if(a?.startsWith('set')||a==='x-autot'||a?.startsWith('so-'))command('settings',[s.settings]);return result;};
-  // A visible connection state remains available in every mode.
-  const status=document.createElement('div');status.id='authority-status';Object.assign(status.style,{position:'fixed',right:'8px',top:'8px',zIndex:10000,padding:'4px 8px',background:'#14110fdd',color:'#f2d27a',font:'12px sans-serif',borderRadius:'6px'});document.body.appendChild(status);
-  setInterval(()=>{poll();status.hidden=!SW.active;status.textContent=SW.ready?'โลกออนไลน์ · แชนแนล '+(SW.channel||1)+' · บันทึกบนเซิร์ฟเวอร์':NET.features?.onlineAuthority===2?'กำลังเชื่อมต่อโลกออนไลน์…':'ต้องใช้เซิร์ฟเวอร์เกมรุ่นใหม่';},500);
+  setInterval(poll,500);
 })(window.G);

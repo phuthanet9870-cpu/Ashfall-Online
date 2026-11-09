@@ -12,7 +12,7 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
   let broadcastAt=0;let storageBlocked=false;let chain=Promise.resolve(),lastTick=now(),accumulator=0,lastFlush=0;
   const enqueue=fn=>{const p=chain.then(fn);chain=p.catch(e=>console.error('Online authority:',e.message));return p;};
   async function catalog(){if(!worldCatalog)worldCatalog=new Map((await chars.docs.read('world-catalog:v2')||[]).map(row=>[row.key,row]));return worldCatalog;}
-  const notify=(pid,event)=>{for(const[c,s]of sessions)if(!pid||s.record.id===pid)send(c,{t:'online_event',event});};
+  const notify=(pid,event)=>{for(const[c,s]of sessions)if(!pid||s.record.id===pid)send(c,{t:'online_event',room:s.world.key,event});};
   function characterMessage(c,record){send(c,{t:'online_character',character:record.character,revision:record.revision,save:record.save});}
   async function flush(force=false,additional=[]){
     if(!force&&now()-lastFlush<1000)return;
@@ -32,7 +32,8 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
     const t=trades.get(id);if(!t)return;trades.delete(id);for(const[c,s]of sessions)if(t.players.includes(s.record.id))send(c,{t:'online_trade',trade:{id,status:reason}});
   }
   async function leave(c){const s=sessions.get(c);if(!s)return;for(const[id,t]of trades)if(t.players.includes(s.record.id))cancelTrade(id,'left_world');s.world.sim.leave(s.record.id);s.world.idleAt=now();sessions.delete(c);dirty.add(s.record);await flush(true);}
-  function tradeView(t,pid){return {id:t.id,version:t.version,status:t.status,players:t.players,names:t.names,offers:t.offers.map((o,i)=>({...o,details:o.items.map(uid=>sessionById(t.players[i])?.record.save.inv.find(it=>it.uid===uid)).filter(Boolean)})),locked:t.locked,confirmed:t.confirmed,me:t.players.indexOf(pid)};}
+  const tradeItems=record=>{const equipped=new Set([...Object.values(record.save.eq||{}),...Object.values(record.save.fashion?.eq||{})].filter(Boolean).map(it=>it.uid));return record.save.inv.concat(record.save.fashion?.owned||[]).filter(it=>!equipped.has(it.uid));};
+  function tradeView(t,pid){return {id:t.id,version:t.version,status:t.status,players:t.players,names:t.names,profiles:t.players.map(id=>{const r=sessionById(id)?.record;return {cls:r?.save.cls,lvl:r?.save.lvl};}),message:t.messages?.[t.players.indexOf(pid)],offers:t.offers.map((o,i)=>({...o,details:o.items.map(uid=>tradeItems(sessionById(t.players[i]).record).find(it=>it.uid===uid)).filter(Boolean)})),locked:t.locked,confirmed:t.confirmed,me:t.players.indexOf(pid)};}
   function publishTrade(t){for(const[c,s]of sessions)if(t.players.includes(s.record.id))send(c,{t:'online_trade',trade:tradeView(t,s.record.id)});}
   const sessionById=id=>[...sessions.values()].find(s=>s.record.id===id);
   function tradeValidate(t){
@@ -43,8 +44,8 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
       const record=i?b.record:a.record,offer=t.offers[i];
       if(!Number.isSafeInteger(offer.gold)||offer.gold<0||offer.gold>record.save.gold)throw new Error('insufficient_gold');
       if(new Set(offer.items).size!==offer.items.length||offer.items.length>8)throw new Error('invalid_offer');
-      for(const uid of offer.items){const item=record.save.inv.find(it=>it.uid===uid);if(!item||item.lock)throw new Error('item_not_tradable');}
-      if(record.save.inv.length-offer.items.length+t.offers[1-i].items.length>300)throw new Error('inventory_full');
+      for(const uid of offer.items){const item=tradeItems(record).find(it=>it.uid===uid);if(!item||item.lock||!chars.rules.S.isEquip(item)&&!['rune','gem','fpack','fashion'].includes(item.kind))throw new Error('item_not_tradable');}
+      if(record.save.inv.length-offer.items.filter(uid=>record.save.inv.some(it=>it.uid===uid)).length+t.offers[1-i].items.filter(uid=>tradeItems((i?a:b).record).find(it=>it.uid===uid)?.kind!=='fashion').length>300)throw new Error('inventory_full');
     }return[a,b];
   }
   async function handle(c,m){
@@ -161,7 +162,10 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
       if(m.t==='online_trade_cancel'){cancelTrade(t.id);return;}
       if(m.t==='online_trade_accept'){if(i!==1||t.status!=='invited')throw new Error('invalid_trade_state');t.status='open';t.version++;publishTrade(t);return;}
       if(t.status!=='open'||m.version!==t.version)throw new Error('stale_trade');
-      if(m.t==='online_trade_offer'){
+      t.messages=null;
+      if(m.t==='online_trade_unlock'){t.locked=[false,false];t.confirmed=[false,false];t.version++;}
+      else if(m.t==='online_trade_suggest'){t.messages=[];t.messages[i]='ส่งคำขอให้อีกฝ่ายเสนอแล้ว';t.messages[1-i]=t.names[i]+' ขอให้คุณเสนอไอเทมหรือทอง';}
+      else if(m.t==='online_trade_offer'){
         if(!Array.isArray(m.items)||m.items.length>8||!m.items.every(x=>typeof x==='string'))throw new Error('invalid_offer');const before=clone(t.offers[i]);t.offers[i]={items:[...m.items],gold:m.gold};try{tradeValidate(t);}catch(e){t.offers[i]=before;throw e;}t.locked=[false,false];t.confirmed=[false,false];t.version++;
       }else if(m.t==='online_trade_lock'){tradeValidate(t);t.locked[i]=true;}
       else if(m.t==='online_trade_confirm'){
@@ -169,14 +173,14 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
         if(t.confirmed.every(Boolean)){
           const[a,b]=tradeValidate(t),before=[clone(a.record.save),clone(b.record.save)];
           try{
-            const records=[a.record,b.record],transfers=t.offers.map((offer,i)=>offer.items.map(uid=>records[i].save.inv.find(it=>it.uid===uid)));
-            for(let n=0;n<2;n++){const save=records[n].save;save.inv=save.inv.filter(it=>!t.offers[n].items.includes(it.uid));save.inv.push(...transfers[1-n]);save.gold+=t.offers[1-n].gold-t.offers[n].gold;save.tradeLog ||= [];save.tradeLog.unshift({id:t.id,t:now(),who:t.names[1-n],gave:transfers[n].map(it=>it.name),got:transfers[1-n].map(it=>it.name),gg:t.offers[n].gold,tg:t.offers[1-n].gold});save.tradeLog=save.tradeLog.slice(0,100);records[n].revision++;}
+            const records=[a.record,b.record],transfers=t.offers.map((offer,i)=>offer.items.map(uid=>tradeItems(records[i]).find(it=>it.uid===uid)));
+            for(let n=0;n<2;n++){const save=records[n].save;save.inv=save.inv.filter(it=>!t.offers[n].items.includes(it.uid));if(save.fashion)save.fashion.owned=save.fashion.owned.filter(it=>!t.offers[n].items.includes(it.uid));for(const it of transfers[1-n]){if(it.kind==='fashion'){save.fashion ||= {owned:[],eq:{}};save.fashion.owned.push(it);}else save.inv.push(it);}save.gold+=t.offers[1-n].gold-t.offers[n].gold;save.tradeLog ||= [];save.tradeLog.unshift({id:t.id,t:now(),who:t.names[1-n],gave:transfers[n].map(it=>it.name),got:transfers[1-n].map(it=>it.name),gg:t.offers[n].gold,tg:t.offers[1-n].gold});save.tradeLog=save.tradeLog.slice(0,100);records[n].revision++;}
             await chars.persist(records,[['trade-committed:'+t.id,{players:t.players,version:t.version,at:now()}]]);
             for(const[c2,s2]of sessions)if(records.includes(s2.record))characterMessage(c2,s2.record);
-            t.status='complete';publishTrade(t);trades.delete(t.id);return;
+            t.status='complete';publishTrade(t);trades.delete(t.id);if(m.request)send(c,{t:'online_trade_command_result',request:m.request});return;
           }catch(e){a.record.save=before[0];b.record.save=before[1];a.record.revision--;b.record.revision--;t.confirmed=[false,false];throw e;}
         }
-      }else throw new Error('unsupported_trade_command');publishTrade(t);return;
+      }else throw new Error('unsupported_trade_command');publishTrade(t);if(m.request)send(c,{t:'online_trade_command_result',request:m.request,version:t.version});return;
     }
     throw new Error('unsupported_online_message');
   }

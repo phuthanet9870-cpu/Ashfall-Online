@@ -400,7 +400,7 @@
   UI.pvpResult = (m, w, r) => {
     const row = u => `<tr class="${u === W.player ? 'me' : ''}"><td>${esc(u.name)}${u === r.mvp.dmg ? ' <span class="mvp">MVP ดาเมจ</span>' : ''}${u === r.mvp.heal && u.ms.heal > 0 ? ' <span class="mvp">MVP ฮีล</span>' : ''}${u === r.mvp.obj && u.ms.obj > 0 ? ' <span class="mvp">MVP ภารกิจ</span>' : ''}</td><td>${D.CLS[u.cls].name}</td><td>${u.ms.k}/${u.ms.d}</td><td>${U.fmt(u.ms.dmg)}</td><td>${U.fmt(u.ms.heal)}</td><td>${u.ms.obj}</td></tr>`;
     const tbl = tm => `<table class="tbl small"><tr><th>ชื่อ</th><th>คลาส</th><th>K/D</th><th>ดาเมจ</th><th>ฮีล</th><th>ภารกิจ</th></tr>${m.team[tm].slice().sort((a, b) => r.score(b) - r.score(a)).map(row).join('')}</table>`;
-    UI.modal(`<h2 class="${w === 0 ? 'good' : 'bad'}">${w === 0 ? 'ชัยชนะ!' : 'พ่ายแพ้'}</h2><p>${esc(m.md.th)} · ${esc(m.mapDef.th)} · ${m.size}v${m.size} · บอท${m.diff.th}</p>
+    UI.modal(`<h2 class="${w === 0 ? 'good' : 'bad'}">${w === 0 ? 'ชัยชนะ!' : 'พ่ายแพ้'}</h2><p>${esc(m.md.th)} · ${esc(m.mapDef.th)} · ${m.size}v${m.size} · ${m.online?'ผู้เล่นออนไลน์':'บอท'+m.diff.th}</p>
       <p>Honor +${r.honor}${r.chest ? ' · หีบ PvP: ' + tierSpan(r.chest.tier, esc(r.chest.name || 'ไอเทม')) : ''}${!r.active ? ` · <span class="bad">${r.afk ? 'AFK เกิน 60 วิ' : 'มีส่วนร่วมไม่ถึง 10%'} — ไม่ได้รับรางวัล</span>` : ''}</p>
       <h4 class="t0c">ทีมเรา</h4>${tbl(0)}<h4 class="t1c">ทีมศัตรู</h4>${tbl(1)}
       <div class="list"><button class="btn primary" data-act="mclose-town">กลับเมือง</button><button class="btn" data-act="mclose-pvp">เล่นอีกครั้ง</button></div>`);

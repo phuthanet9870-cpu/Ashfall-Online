@@ -79,23 +79,24 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
       const s=S.save,won=a.unit.team===winner;
       if(desc.kind==='pvp'){s.honor+=won?100:35;s.pvp[won?'wins':'losses']++;s.pvp.mmr=Math.max(0,(s.pvp.mmr||1000)+(won?20:-15));}
       else {s.war+=won?300:100;s.gold+=won?5000:1250;if(won)S.ach('siege1');}
-      changed(a.record);event(a.record.id,{t:'match_result',winner,team:a.unit.team,kind:desc.kind});
+      changed(a.record);event(a.record.id,{t:'match_result',winner,team:a.unit.team,kind:desc.kind,result:desc.kind==='pvp'?{honor:won?100:35,active:true,afk:false,chest:null}:{w:won?0:1,ranked:true,delta:won?20:-15,war:won?300:100,gold:won?5000:1250,rating:(s.guild?.rating||1000)+(won?20:-15),victory:[]},stats:[...members.values()].map(({unit:u})=>({id:u.id,pid:u.pid,team:u.team,name:u.name,cls:u.cls,lvl:u.lvl,ms:clone(u.ms)})),history:clone(mode.history||[])});
     });
   }
   if(desc.kind==='pvp')mode.finish=finish;
   if(desc.kind==='siege'){mode.endWar=finish;mode.enemyBuys=noop;}
   if(desc.kind==='siege'){
     // Round objectives and castle transitions remain the shared game rules; rewards are per participant.
-    mode.endRound=function(w){if(this.phase!=='fight')return;this.phase='between';this.line+=w===0?1:-1;this.history.push({round:this.round,w,line:this.line});if(Math.abs(this.line)>=5||this.round>=11)return finish(this.line>0?0:this.line<0?1:w);E.later(2.5,()=>this.setupRound());};
+    mode.endRound=function(w){if(this.phase!=='fight')return;this.phase='between';this.line+=w===0?1:-1;this.history.push({round:this.round,w,line:this.line,ci:(this.R||this.roles()).ci});if(Math.abs(this.line)>=5||this.round>=11)return finish(this.line>0?0:this.line<0?1:w);E.later(2.5,()=>this.setupRound());};
   }
   if(desc.kind==='dungeon'){
+    const pickup=mode.onPickup;mode.onPickup=function(item){item._collector=W.player?.pid;pickup?.call(this,item);};
     mode.vacuum=noop; // Shared ground drops never auto-transfer to the first participant.
     const clear=mode.floorClear;
     mode.floorClear=function(){
       const before=this.floor,leading=W.player?.pid;clear.call(this);
       for(const a of members.values())context(a.record.id,()=>{const d=S.save.dungeons[desc.id] ||= {best:0,cp:0,daily:{}};d.best=Math.max(d.best||0,before);if(a.record.id!==leading)S.save.stats.floors++;if(before%10===0)d.cp=Math.max(d.cp||0,before);changed(a.record);});
     };
-    mode.endRun=function(reason){if(this.ended)return;this.ended=true;for(const a of members.values())context(a.record.id,()=>{const full=this.full;this.full=(S.save.dungeons[desc.id]?.daily?.runs||0)<=D.DUNGEON_DAILY_FULL;const reward=S.dungeonRewards(this,reason);this.full=full;for(const item of reward.items)S.addItem(item,true);changed(a.record);event(a.record.id,{t:'dungeon_result',floor:this.floor,reason});});};
+    mode.endRun=function(reason){if(this.ended)return;this.ended=true;for(const a of members.values())context(a.record.id,()=>{const full=this.full;this.full=(S.save.dungeons[desc.id]?.daily?.runs||0)<=D.DUNGEON_DAILY_FULL;const reward=S.dungeonRewards(this,reason);this.full=full;for(const item of reward.items)S.addItem(item,true);changed(a.record);event(a.record.id,{t:'dungeon_result',floor:this.floor,reason,result:clone(reward),full:(S.save.dungeons[desc.id]?.daily?.runs||0)<=D.DUNGEON_DAILY_FULL,run:{cleared:this.run.cleared,bosses:clone(this.run.bosses),king:this.run.king,got:this.run.got.filter(it=>it._collector===a.record.id).map(it=>{const copy=clone(it);delete copy._collector;return copy;})}});});};
   }
   if(desc.kind==='wbarena'){
     const onKill=mode.onKill;
@@ -167,6 +168,8 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
   }
   function snapshot(){const keys=['id','pid','look','kind','cls','team','name','lvl','x','y','fx','fy','sc','hp','maxhp','res','resMax','moveSpd','rooted','dashing','kb','shield','dead','deadT','moving','grade','boss','col','col2','body','elem','md','fashion','title','guildTag','mounted','cc','buffs','stealth','jz','red','pk','role','roleTh','label','vk','gk','sub','isWB','wbId','wbPh','wbEnr','ms'];
     const meta={};for(const k of ['floor','full','cleared','ended','over','winner','waiting','score','t','limit','target','round','roundWins','phase','prepT','roundT','line','hold','throne','tickets','pool','kills','R','safeR','half','history','timers','teamNames'])if(mode[k]!==undefined)meta[k]=clone(mode[k]);
+    if(desc.kind==='pvp')meta.bossId=mode.boss?.id;
+    if(desc.kind==='siege'){meta.gateId=mode.gate?.id;meta.innerId=mode.inner?.id;}
     if(mode.run)meta.run={cleared:mode.run.cleared,bosses:clone(mode.run.bosses),king:mode.run.king,got:[]};
     if(mode.points)meta.points=clone(mode.points);if(mode.hill)meta.hill=clone(mode.hill);if(mode.payload)meta.payload=clone(mode.payload);
     if(mode.flags)meta.flags=mode.flags.map(f=>({...f,carrier:f.carrier?.id||null}));

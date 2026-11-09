@@ -31,6 +31,7 @@
   const srvRow = () => `<div class="b2srv">${SERVERS.map(([id, n]) => `<button class="${id === srv() ? 'on' : ''}" data-b2="srv" data-v="${id}">${esc(n)}</button>`).join('')}</div>`;
   const login = (tab) => { mode = 'login'; const P = LS.get('ashfall_prefs', {}); tab = tab || 'main';
     if (tab === 'main') box.innerHTML = `${logo}<div class="b2card"><h3>เข้าสู่ระบบ</h3><p class="b2s">เลือกเซิร์ฟเวอร์</p>${srvRow()}
+      <button class="b2btn g" data-b2="google"><b>G</b>เข้าสู่ระบบด้วย Google</button>
       <button class="b2btn" data-b2="tab" data-v="acc">🔑 เข้าสู่ระบบด้วยบัญชีและรหัสผ่าน</button>
       <button class="b2btn ghost" data-b2="guest">👤 เล่นแบบผู้เยี่ยมชม</button><p class="b2msg"></p>
       <p class="b2fine">${globalThis.ASHFALL_STORAGE.persistent ? 'เซฟเก็บบนเซิร์ฟเวอร์ · บัญชีใช้เล่นข้ามเครื่องได้' : 'เบราว์เซอร์นี้ไม่เก็บการเข้าสู่ระบบ · ใช้บัญชีเพื่อกลับมาเล่นตัวละครเดิม'}</p></div>`;

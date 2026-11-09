@@ -26,6 +26,6 @@
  };
  document.addEventListener('change',e=>{if(!SW.active||!e.target.dataset.gm)return;e.stopImmediatePropagation();const el=e.target,key=el.dataset.gm,enabled=el.checked;if(!SW.gm){el.checked=!enabled;UI.toast('พิมพ์ /gmadmin2008 ก่อน','bad');return;}send('flag',{dataset:{k:key}},{enabled});},true);
  const render=UI.gmRender,supported=new Set('setlv maxlv setcls gmcls cur dia tix reroll stones cons pets ach infamy0 heal tp pspd give gmcat gmgive kit kit2 allmax autons runekit fashkit gmsrall gems clearinv dropground spawn mkill dgclear killall mfreeze mheal mpull mclear rates announce wbnow dgunlock dgdaily pvpwin pvplose score prep skset skreset gmset export dgsim gmlock show showv showstop sktry dgenter'.split(' '));
- UI.gmRender=(tab,P)=>{const html=render(tab,P);if(!SW.active)return html;return '<p class="muted">GM ออนไลน์ · คำสั่งโลกมีผลกับทุกคนในแชนแนลนี้</p>'+html.replace(/<button\b[^>]*data-act="gm"[^>]*>/g,tag=>{const command=tag.match(/data-c="([^"]+)"/)?.[1];return command&&!supported.has(command)?tag.replace(/>$/,' disabled title="คำสั่งนี้ยังไม่รองรับในโลกออนไลน์">'):tag;});};
+ UI.gmRender=(tab,P)=>{const html=render(tab,P);if(!SW.active)return html;return html.replace(/<button\b[^>]*data-act="gm"[^>]*>/g,tag=>{const command=tag.match(/data-c="([^"]+)"/)?.[1];return command&&!supported.has(command)?tag.replace(/>$/,' disabled title="คำสั่งนี้ยังไม่รองรับในโลกออนไลน์">'):tag;});};
  SW.gmCommand=(command,input={})=>send(command,null,input);
 })(window.G);
