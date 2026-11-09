@@ -2,7 +2,7 @@
 
 เกม MMO 2D พิกเซลบนเบราว์เซอร์ ใช้ Node.js หรือ Cloudflare Worker + Durable Object เป็นผู้คำนวณเกมกลาง และเสิร์ฟหน้าเว็บผ่าน Node, itch.io หรือ GitHub Pages
 
-ติดตั้ง Worker ที่ `ashfall-online.phuthanet9870.workers.dev` แล้วเมื่อ 9 พฤศจิกายน 2026 และผ่าน [การตรวจ production HTTPS/WebSocket](https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42606970823) ว่าใช้ `onlineAuthority=2` การตรวจนี้ไม่แทนการทดสอบโหลดระยะยาวบน production
+ติดตั้ง Worker ที่ `ashfall-online.phuthanet9870.workers.dev` แล้วเมื่อ 9 พฤศจิกายน 2026 และผ่าน [การตรวจ production HTTPS/WebSocket](https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42607927500) ว่าใช้ `onlineAuthority=2` การตรวจนี้ไม่แทนการทดสอบโหลดระยะยาวบน production
 
 ## ระบบออนไลน์
 

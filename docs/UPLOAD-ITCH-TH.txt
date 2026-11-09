@@ -3,7 +3,7 @@ Ashfall Online — ชุดสำหรับ itch.io
 สถานะวันที่ 9 พฤศจิกายน 2026: ติดตั้ง backend บน Cloudflare แล้ว
 ตรวจ HTTPS /health และ WebSocket onlineAuthority=2, serverGM=1, snapshotHz=10
 พร้อมตรวจ commit ของ backend ตรงกับรุ่นที่ deploy แล้ว:
-https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42606970823
+https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42607927500
 สำหรับ ZIP หน้าเกมรุ่นนี้ ให้ทำข้อ 2 ได้เลย ไม่ต้องติดตั้ง backend ซ้ำ
 ข้อ 1 เก็บไว้สำหรับผู้ดูแลเมื่อต้องย้ายหรือติดตั้งเซิร์ฟเวอร์ใหม่
 
