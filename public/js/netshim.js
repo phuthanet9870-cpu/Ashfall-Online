@@ -12,7 +12,7 @@
   let PID = ls('ashfall_pid'); if (!/^[a-f0-9]{16}$/.test(PID || '')) { PID = rnd(8); ls('ashfall_pid', PID); }
   let KEY = ls('ashfall_key'); if (!KEY || KEY.length < 32) { KEY = rnd(16); ls('ashfall_key', KEY); }
   const bus = new Map(); const emit = (t, m) => { for (const f of bus.get(t) || []) { try { f(m); } catch (e) { } } };
-  const NET = window.ASHFALL_NET = { pid: PID, connected: false, authed: false, peerPid: new Map(), on(t, f) { (bus.get(t) || bus.set(t, []).get(t)).push(f); }, send(o) { send(o); } };
+  const NET = window.ASHFALL_NET = { pid: PID, connected: false, authed: false, error: '', url: URL_, peerPid: new Map(), on(t, f) { (bus.get(t) || bus.set(t, []).get(t)).push(f); }, send(o) { send(o); } };
   let ws = null, myId = null, retry = 1000, authStr = '';
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
   const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!s || !NET.connected) return; const a = { t: 'auth', pid: PID, key: KEY, name: String(s.name || '').slice(0, 20), cls: s.cls, lv: s.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; send(a); };
@@ -21,10 +21,10 @@
     let connected = false, lastLobby = null, lobbyStr = '', lobbyT = 0;
     const connCbs = [], peerCbs = [], lobby = new Map(), subs = new Map();
     const asPeers = (map) => [...map].map(([peer, presence]) => ({ peer, presence, kind: 'viewer', isMe: peer === myId }));
-    const connect = () => { try { ws = new WebSocket(URL_); } catch (e) { setTimeout(connect, retry); return; }
-      ws.onopen = () => { connected = NET.connected = true; retry = 1000; authStr = ''; auth(true); connCbs.forEach(f => { try { f(true); } catch (e) { } }); if (lastLobby) send({ t: 'lp', d: lastLobby }); for (const s of subs.values()) { s.last = ''; send({ t: 'join', room: s.name }); } emit('open', {}); };
-      ws.onclose = () => { const was = connected; connected = NET.connected = NET.authed = false; if (was) { connCbs.forEach(f => { try { f(false); } catch (e) { } }); emit('close', {}); } setTimeout(connect, retry + Math.random() * 1000); retry = Math.min(15000, retry * 1.6); };
-      ws.onerror = () => { };
+    const connect = () => { try { ws = new WebSocket(URL_); NET.error = ''; } catch (e) { NET.error = 'WebSocket URL ไม่ถูกต้อง: ' + (e.message || e); console.error('[Ashfall Online] WebSocket URL:', URL_, e); setTimeout(connect, retry); return; }
+      ws.onopen = () => { NET.error = ''; connected = NET.connected = true; retry = 1000; authStr = ''; auth(true); connCbs.forEach(f => { try { f(true); } catch (e) { } }); if (lastLobby) send({ t: 'lp', d: lastLobby }); for (const s of subs.values()) { s.last = ''; send({ t: 'join', room: s.name }); } emit('open', {}); };
+      ws.onclose = (event) => { NET.error = 'การเชื่อมต่อถูกปิด (code ' + event.code + ')'; const was = connected; connected = NET.connected = NET.authed = false; if (was) { connCbs.forEach(f => { try { f(false); } catch (e) { } }); emit('close', {}); } setTimeout(connect, retry + Math.random() * 1000); retry = Math.min(15000, retry * 1.6); };
+      ws.onerror = (event) => { NET.error = 'เชื่อมต่อ WebSocket ไม่สำเร็จ ตรวจ URL และ Cloudflare Worker'; console.error('[Ashfall Online] WebSocket error:', URL_, event); };
       ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (er) { return; }
         if (m.t === 'hi') { myId = m.id; return; }
         if (m.t === 'me') { NET.authed = true; }
@@ -37,7 +37,7 @@
       onConnection(cb) { connCbs.push(cb); if (connected) cb(true); },
       onPeers(cb) { peerCbs.push(cb); },
       peers() { return asPeers(lobby); },
-      presence(d) { lastLobby = d; const str = JSON.stringify(d); const now = Date.now(); if (str === lobbyStr && now - lobbyT < 5000) return; lobbyStr = str; lobbyT = now; send({ t: 'lp', d }); },
+      presence(d) { lastLobby = d; const str = JSON.stringify(d); const now = Date.now(); if (now - lobbyT < 1000) return; if (str === lobbyStr && now - lobbyT < 5000) return; lobbyStr = str; lobbyT = now; send({ t: 'lp', d }); },
       async join(name) { const s = { name, map: new Map(), cbs: [], channel: 1, last: '', lastT: 0,
           peers() { return asPeers(this.map); }, onPeers(cb) { this.cbs.push(cb); },
           async presence(d) { const now = Date.now(); if (now - this.lastT < 160) return; const o = Object.assign({}, d, { pid: PID }); const str = JSON.stringify(o); if (str === this.last && now - this.lastT < 3000) return; this.last = str; this.lastT = now; send({ t: 'rp', room: name, d: o }); },
