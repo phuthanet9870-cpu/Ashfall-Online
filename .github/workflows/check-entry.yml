@@ -1,0 +1,17 @@
+name: Check live game entry
+on:
+  push:
+    branches: [main]
+    paths: ['.github/scripts/check-entry.mjs', '.github/workflows/check-entry.yml']
+  workflow_dispatch:
+jobs:
+  entry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node .github/scripts/check-entry.mjs
