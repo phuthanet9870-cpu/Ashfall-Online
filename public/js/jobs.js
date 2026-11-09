@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['jobs'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Job equipment (Ragnarok-style):
    · Weapons are job-restricted by weapon type; some types are shared by related jobs (daggers, staves, maces, swords,
      spears, bows …). Armor, accessories and relics are shared by every job (class-set pieces stay class-only).
@@ -101,4 +113,6 @@
     .ijobs div{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}.jb{padding:0 5px;border-radius:4px;background:#241d14;border:1px solid #3e321e;color:#d8c8a0;font-size:11px}.jb.me{border-color:#f2d27a;color:#ffe9a8}.jb.all{color:#9fe8a0}
     .jbgr{display:flex;flex-direction:column;gap:4px;margin:4px 0 8px}.jbw .jbj{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;font-size:10px;min-height:28px}.jbw .jbj span{padding:0 3px;border-radius:3px;background:rgba(255,255,255,.06)}.jbw .jbj span.me{color:#ffe9a8;background:rgba(242,210,122,.2)}.jbw.mine{box-shadow:0 0 0 1px #f2d27a inset}`;
   document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

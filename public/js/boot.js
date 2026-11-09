@@ -6,7 +6,7 @@
   const base = (() => { const s = [...document.scripts].find(x => /js\/boot\.js/.test(x.src)); return s ? s.src.replace(/js\/boot\.js.*$/, '') : ''; })();
   const ART = { cover: base + 'assets/ui/cover.webp', loading: base + 'assets/ui/loading.webp', login: base + 'assets/ui/login.webp' }; const AW = 1672, AH = 941, AR = AW / AH;
   const SERVERS = [{ id: 's1', n: 'Aurelion-1', r: 'เอเชีย', st: 'ลื่นไหล' }, { id: 's2', n: 'Aurelion-2', r: 'เอเชีย', st: 'คนเยอะ' }, { id: 's3', n: 'Solaris', r: 'ยุโรป', st: 'ลื่นไหล' }, { id: 's4', n: 'Umbra', r: 'PvP อิสระ', st: 'ลื่นไหล' }];
-  const LS = { get: (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
+  const LS = { get: (k, d) => { try { const v = JSON.parse(globalThis.ASHFALL_STORAGE.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } }, set: (k, v) => { try { globalThis.ASHFALL_STORAGE.setItem(k, JSON.stringify(v)); } catch (e) { } } };
   const prefs = () => LS.get('ashfall_prefs', { server: 's1', remember: true, lastAcc: '', set: {} }); const savePrefs = p => LS.set('ashfall_prefs', p);
   const accts = () => LS.get('ashfall_accounts', {}); const saveAccts = a => LS.set('ashfall_accounts', a);
   const norm = s => String(s || '').trim().toLowerCase();

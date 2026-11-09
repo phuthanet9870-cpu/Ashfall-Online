@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['dungeon2'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* 1000-floor dungeons: drops scale with the floor (ilv mapped to the 1–100 item scale, then a floor power multiplier
    up to ×3.5 at floor 1000), deeper floors can drop already-enhanced gear (+1 … +10), monsters hit harder the deeper you go. */
 (function (G) {
@@ -12,4 +24,6 @@
   const rd0 = S.rollDrop; S.rollDrop = (type, tier, ilv) => { const m = W.mode; if (!m || m.kind !== 'dungeon') return rd0(type, tier, ilv); const F = m.floor || 1; return scaleItem(rd0(type, tier, Math.max(1, Math.min(100, Math.ceil(ilv / 10)))), F); };
   const dm0 = S.DungeonMode; S.DungeonMode = function () { const M = dm0.apply(this, arguments); const sf = M.setupFloor; M.setupFloor = function () { const r = sf.apply(this, arguments); const F = this.floor; const am = 1 + F / 180, dm = 1 + F / 300;
       for (const u of W.units) if (u.kind === 'mob' && !u._dgScaled) { u._dgScaled = true; u.st.atk = Math.round(u.st.atk * am); u.st.def = Math.round(u.st.def * dm); if (F > 200) { u.st.crit = Math.min(60, 5 + F / 25); u.moveSpd *= 1 + Math.min(0.5, F / 2000); } } return r; }; return M; };
-})(window.G);
+})(G);
+
+});

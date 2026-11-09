@@ -1,7 +1,14 @@
 'use strict';
 /* Bosses from "Duelyst Unit Animations": animated sprite bosses replace every map / PvP / dungeon boss; the remaining bosses
    become World Bosses that rotate in a dedicated arena (ลานบอสโลก) on a real-time spawn schedule. */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['bosses'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+
   const U = G.U, D = G.D, E = G.E, W = G.W, S = G.S, SPR = G.SPR, V = G.VFX;
   const BM = G.BOSS_MAN || {};
   const NAMES = { andromeda: 'Andromeda', antiswarm: 'Antiswarm', borealjuggernaut: 'Boreal Juggernaut', candypanda: 'Candy Panda', chaosknight: 'Chaos Knight', christmas: 'Frostfire Krampus', cindera: 'Cindera', city: 'Spirit of the City', crystal: 'Crystal Wyrm', decepticle: 'Decepticle', decepticlechassis: 'Decepticle Chassis', decepticlehelm: 'Decepticle Helm', decepticleprime: 'Decepticle Prime', decepticlesword: 'Decepticle Blade', decepticlewings: 'Decepticle Wings', dissonance: 'Dissonance', emp: 'E.M.P.', gol: 'Gol', grym: 'Grym', harmony: 'Harmony', invader: 'Invader', kane: 'Kane', kron: 'Kron', legion: 'Legion', malyk: 'Malyk', manaman: 'Manaman', orias: 'Orias', oriasidol: 'Orias Idol', paragon: 'Paragon of Light', protector: 'Protector', sandpanther: 'Sand Panther', serpenti: 'Serpenti', shadowlord: 'Shadow Lord', shinkagezendo: 'Shinkage Zendo', skurge: 'Skurge', skyfalltyrant: 'Skyfall Tyrant', solfist: 'Solfist', soulstealer: 'Soul Stealer', spelleater: 'Spelleater', taskmaster: 'Taskmaster', treatdemon: 'Treat Demon', treatdrake: 'Treat Drake', treatoni: 'Treat Oni', umbra: 'Umbra', unhallowed: 'Unhallowed', valiant: 'Valiant', vampire: 'Vampire Lord', wolfpunch: 'Wolfpunch', wraith: 'Wraith', wujin: 'Wujin' };
@@ -103,4 +110,4 @@
   const act0 = UI.act; UI.act = (el, e) => { if (el.dataset.act === 'wb-go') { UI.closePanel(); S.goWorldBoss(); return; } return act0(el, e); };
   // credits
   if (UI.PANELS.settings) { const r0 = UI.PANELS.settings.render; UI.PANELS.settings.render = function (tab, P) { return r0.call(this, tab, P) + '<p class="muted">Boss animations: Duelyst unit animations (Counterplay Games)</p>'; }; }
-})(window.G);
+});

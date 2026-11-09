@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['tickreq'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Chronomancer · Tick Requiem (rework): opens a clock field on the ground for 6 s (radius 5). Every tick (0.5 s) each
    enemy inside: takes damage, is slowed, has its buffs and shield stripped (the hour hand "rewinds" them), gets ATK −25 %
    and DEF −15 % while inside, and the Chronomancer drains 25 % of that damage as HP. The field is drawn as the clock
@@ -6,7 +18,7 @@
 (function (G) {
   const E = G.E, W = G.W, D = G.D, V = G.VFX, U = G.U; if (!E || !E.exec) return;
   const DUR = 8, TICK = 0.5, R = 6; const isSU = (u, s) => !!(u && s && s.setUlt && u.cls === 'chronomancer');
-  const fields = [];
+  const fields = []; G.TICK_FIELDS = fields;
   const x0 = E.exec; E.exec = (u, s, A) => { if (!isSU(u, s)) return x0(u, s, A);
     const x = A && typeof A.x === 'number' ? A.x : u.x, y = A && typeof A.y === 'number' ? A.y : u.y;
     const pal = (G.FX6 && G.FX6.PAL && G.FX6.PAL.chronomancer) || ['#e8fff0', '#7affd8', '#2aa88a', '#0a2a22'];
@@ -29,4 +41,6 @@
   const ds0 = D.descSkill; if (ds0) D.descSkill = (s) => s && s.setUlt && s.cls === 'chronomancer' ? TH : ds0(s);
   if (G.SETULT2 && G.SETULT2.chronomancer) G.SETULT2.chronomancer.th = TH; const cc = D.CLS.chronomancer; if (cc && cc.setUlt) cc.setUlt.suTh = TH;
   G.TICKREQ = { fields };
-})(window.G);
+})(G);
+
+});

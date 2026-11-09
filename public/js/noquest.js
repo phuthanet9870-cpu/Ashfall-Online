@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['noquest'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Quest system removed: no main/daily quest chain, no quest tracker, quest arrow, quest panel, quest-giver NPCs or auto-quest.
    (Tutorial, save points, world boss, dungeons and everything else stay.) */
 (function (G) {
@@ -13,4 +25,6 @@
     for (const u of W.units) if (u.role === 'quest' && u.kind === 'npc' && !u.dead) { u.dead = true; u.hidden = true; } for (let i = W.units.length - 1; i >= 0; i--) if (W.units[i].role === 'quest' && W.units[i].dead && W.units[i].kind === 'npc') W.units.splice(i, 1); };
   setInterval(() => { try { strip(); } catch (e) { } }, 600);
   const css = document.createElement('style'); css.textContent = '#quest-track,#btn-autoq{display:none!important}'; document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

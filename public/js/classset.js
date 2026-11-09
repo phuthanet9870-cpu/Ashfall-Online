@@ -1,7 +1,10 @@
 'use strict';
 /* Class-exclusive item sets (30 sets × 6 pieces), set bonuses matched to the class role, 6-piece Set Ultimate (16th skill, key G),
    set codex (click → equip owned pieces), gacha (pet eggs / fashion / class set / wings), GM integration */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['classset'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, S = G.S, UI = G.UI, W = G.W, E = G.E, V = G.VFX, FX = G.FX, TX = G.TX;
   const $ = s => document.querySelector(s), esc = UI.esc;
   const PIECES = ['weapon', 'head', 'chest', 'gloves', 'legs', 'boots'];
@@ -42,8 +45,9 @@
   const CS = k => D.CLASS_SETS.find(x => x.k === k);
   // riders + vfx for set ultimates
   const RIDER_BY_ROLE = r => (ROLE_SET[r] || ROLE_SET.melee).rider;
-  for (const c of D.CLASSES) { const [k, v] = RIDER_BY_ROLE(c.role).split(':'); c.setUlt.rider = { k, v: +v }; c.setUlt.base.rider = c.setUlt.rider; const used = new Set(D.CLASSES.map(x => FX.T[x.id][15]).filter(Boolean)); const cand = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].flatMap(i => FX.T[c.id][i].replace(/@\w+/, '').trim().split(/\s+/)); const mo = cand.find(m => !used.has('apex ' + m)) || cand[0]; FX.T[c.id][15] = 'apex ' + mo; }
+  for (const c of D.CLASSES) { const [k, v] = RIDER_BY_ROLE(c.role).split(':'); c.setUlt.rider = { k, v: +v }; c.setUlt.base.rider = c.setUlt.rider; if (G.headless) continue; const used = new Set(D.CLASSES.map(x => FX.T[x.id][15]).filter(Boolean)); const cand = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].flatMap(i => FX.T[c.id][i].replace(/@\w+/, '').trim().split(/\s+/)); const mo = cand.find(m => !used.has('apex ' + m)) || cand[0]; FX.T[c.id][15] = 'apex ' + mo; }
 
+  if (!G.headless) {
   // apex motif: the class weapon descends from the sky as a giant pixel avatar, then shatters into the class element
   const avatarCache = new Map();
   const avatarOf = (cls) => { if (avatarCache.has(cls)) return avatarCache.get(cls); const img = new Image(); img.src = UI.itemIcon({ slot: 'weapon', wpn: D.CLS[cls].weapon, tier: 10, kind: 'gear' }); avatarCache.set(cls, img); return img; };
@@ -60,6 +64,7 @@
   };
   if (FX.ICONX) FX.ICONX.apex = 'star5';
 
+  }
   // ---------- items ----------
   S.genClassItem = (cls, slot, tier, ilv) => {
     const c = D.CLS[cls], set = D.CLASS_SETS.find(x => x.cls === cls), R = ROLE_SET[c.role] || ROLE_SET.melee;
@@ -73,6 +78,33 @@
   S.genItem = (kind, tier, ilv, o = {}) => { const it = gen0(kind, tier, ilv, o); if (it.set && it.set.startsWith('cs_') && !o.cset) { const pool = D.ACC_SETS.filter(x => !x.cset); it.set = U.pick(pool).k; } return it; };
   const eq0 = S.equip; S.equip = (it) => { if (it && it.clsOnly && it.clsOnly !== S.save.cls) return `ใช้ได้เฉพาะคลาส ${D.CLS[it.clsOnly].name}`; return eq0(it); };
   const cc0 = S.changeClass; S.changeClass = (cls) => { const r = cc0(cls); const s = S.save; if (r) { let n = 0; for (const k of Object.keys(s.eq)) { const it = s.eq[k]; if (it && it.clsOnly && it.clsOnly !== s.cls) { s.inv.push(it); delete s.eq[k]; n++; } } if (n) { UI.toast(`ถอดชุดคลาสเดิม ${n} ชิ้นเก็บเข้ากระเป๋า`, 'info'); S.refreshPlayer(true); } } return r; };
+  // ---------- GACHA ----------
+  const MORE_PETS = [
+    { k: 'golemling', n: 'Pebble Golem', th: 'โกเล็มก้อนหิน', bonus: { def: 40 }, c: '#9a9080', body: 'golem' }, { k: 'sprout', n: 'Mandra Sprout', th: 'ต้นกล้าแมนดรา', bonus: { regen: 1 }, c: '#6ac85a', body: 'plant' },
+    { k: 'imp', n: 'Mischief Imp', th: 'อิมป์ซุกซน', bonus: { crit: 2 }, c: '#c84a6a', body: 'imp' }, { k: 'wisp', n: 'Star Wisp', th: 'ภูตดวงดาว', bonus: { elem: 4 }, c: '#9ad8ff', body: 'elemental' },
+    { k: 'frostslime', n: 'Frost Slime', th: 'สไลม์น้ำแข็ง', bonus: { hpP: 3 }, c: '#9ae0ff', body: 'slime' }, { k: 'shadowbat', n: 'Shadow Bat', th: 'ค้างคาวเงา', bonus: { ls: 2 }, c: '#5a4a7a', body: 'bat' },
+    { k: 'goldfox', n: 'Golden Fox', th: 'จิ้งจอกทองคำ', bonus: { gold: 12 }, c: '#ffd84a', body: 'beast' }, { k: 'wyrmling', n: 'Void Wyrmling', th: 'มังกรว่างเปล่าน้อย', bonus: { atkP: 5 }, c: '#2a2440', body: 'dragon' }
+  ];
+  for (const p of MORE_PETS) if (!D.PETS.find(x => x.k === p.k)) D.PETS.push(p);
+  const PET_R = { slime: 1, fox: 1, owl: 2, sprout: 1, golemling: 2, frostslime: 2, imp: 3, shadowbat: 3, wisp: 3, goldfox: 4, drake: 4, wyrmling: 5 };
+  const RAR = [{ n: 'ธรรมดา', t: 6, w: 52, c: '#8a96a8' }, { n: 'หายาก', t: 7, w: 28, c: '#3a8aff' }, { n: 'มหากาพย์', t: 8, w: 13, c: '#a85cff' }, { n: 'ตำนาน', t: 9, w: 5.5, c: '#ff9a1e' }, { n: 'ปฐมกาล', t: 10, w: 1.5, c: '#ff5ae8' }];
+  const rollR = (minR = 0) => { const L = RAR.slice(minR); const tot = L.reduce((a, r) => a + r.w, 0); let x = Math.random() * tot; for (let i = 0; i < L.length; i++) { x -= L[i].w; if (x <= 0) return i + minR; } return minR; };
+  const BOX = {
+    pet: { n: 'ไข่สัตว์เลี้ยง', d: 'สุ่มสัตว์เลี้ยง 12 แบบ · ตัวที่ซ้ำจะได้ทองคืน 30%', cost: 30000, icon: () => eggIcon('#ffe0b0', '#ff7a3a') },
+    fashion: { n: 'กล่องแฟชั่น', d: 'สุ่มชุดแฟชั่นทุกช่อง 10 ธีม', cost: 20000, icon: () => UI.itemIcon({ kind: 'fashion', slot: 'f_body', colors: ['#ff7ab0', '#ffffff'] }) },
+    cset: { n: 'กล่องชุดคลาส', d: 'สุ่มชิ้นส่วนชุดคลาสของคลาสปัจจุบัน ระดับ 6–10', cost: 60000, icon: () => UI.itemIcon({ cset: S.save ? S.save.cls : 'blademaster', slot: 'chest', tier: 9 }) },
+    wings: { n: 'กล่องปีก', d: 'สุ่มปีกแฟชั่น 10 ธีม ระดับ 6–10', cost: 40000, icon: () => UI.itemIcon({ kind: 'fashion', slot: 'f_wings', colors: ['#bff4ff', '#4a8aff'] }) }
+  };
+  function eggIcon(c1, c2) { return K.make('egg' + c1 + c2, k => { k.E(16, 17, 10, 13, c1); k.L(8, 18, 24, 14, 2, c2); k.C(12, 11, 2, '#ffffff'); k.C(21, 23, 2, c2); }, { spark: [[25, 6]] }); }
+  UI.gachaIcon = k => BOX[k].icon(); UI.GACHA_BOX = BOX; UI.GACHA_RAR = RAR;
+  const pull = (k) => { const s = S.save; s.gacha = s.gacha || { pity: {}, tix: 0 }; const pity = s.gacha.pity[k] = (s.gacha.pity[k] || 0) + 1; let ri = rollR(pity >= 30 ? 3 : pity % 10 === 0 ? 2 : 0); if (ri >= 3) s.gacha.pity[k] = 0; const r = RAR[ri];
+    if (k === 'pet') { const pool = D.PETS.filter(p => (PET_R[p.k] || 2) <= ri + 2 && (PET_R[p.k] || 2) >= Math.min(ri, 4)); const p = U.pick(pool.length ? pool : D.PETS); s.pets = s.pets || []; const dup = s.pets.includes(p.k); if (dup) s.gold += Math.round(BOX.pet.cost * 0.3); else s.pets.push(p.k); return { r, petKey: p.k, img: UI.petIcon(p.k), n: p.th + (dup ? ' (ซ้ำ +ทอง)' : ''), new: !dup }; }
+    if (k === 'fashion' && S.fashionPack) return S.fashionPack(r);
+    if (k === 'fashion' || k === 'wings') { const slot = k === 'wings' ? 'f_wings' : U.pick(D.FASHION_SLOTS).k; const it = S.genItem('fashion', r.t, 1, { slot }); s.fashion.owned.push(it); return { r, img: UI.itemIcon(it), n: it.name, it }; }
+    const it = S.genClassItem(s.cls, U.pick(PIECES), r.t, Math.min(100, Math.max(20, Math.round(s.lvl / 2) + r.t * 3))); S.addItem(it, true); return { r, img: UI.itemIcon(it), n: it.name, it };
+  };
+  S.pullGacha = pull; S.rollGachaRarity = rollR; S.GACHA_RAR = RAR;
+  if (G.headless) return;
   // icons: unique per class + slot
   const K = UI.ICONKIT, IC = UI.ICONS; const ic0 = UI.itemIcon;
   UI.itemIcon = (it) => {
@@ -104,31 +136,6 @@
   // ---------- auto-equip understands class sets ----------
   if (S.classScore) { const cs0 = S.classScore; S.classScore = (st, cls) => cs0(st, cls); }
 
-  // ---------- GACHA ----------
-  const MORE_PETS = [
-    { k: 'golemling', n: 'Pebble Golem', th: 'โกเล็มก้อนหิน', bonus: { def: 40 }, c: '#9a9080', body: 'golem' }, { k: 'sprout', n: 'Mandra Sprout', th: 'ต้นกล้าแมนดรา', bonus: { regen: 1 }, c: '#6ac85a', body: 'plant' },
-    { k: 'imp', n: 'Mischief Imp', th: 'อิมป์ซุกซน', bonus: { crit: 2 }, c: '#c84a6a', body: 'imp' }, { k: 'wisp', n: 'Star Wisp', th: 'ภูตดวงดาว', bonus: { elem: 4 }, c: '#9ad8ff', body: 'elemental' },
-    { k: 'frostslime', n: 'Frost Slime', th: 'สไลม์น้ำแข็ง', bonus: { hpP: 3 }, c: '#9ae0ff', body: 'slime' }, { k: 'shadowbat', n: 'Shadow Bat', th: 'ค้างคาวเงา', bonus: { ls: 2 }, c: '#5a4a7a', body: 'bat' },
-    { k: 'goldfox', n: 'Golden Fox', th: 'จิ้งจอกทองคำ', bonus: { gold: 12 }, c: '#ffd84a', body: 'beast' }, { k: 'wyrmling', n: 'Void Wyrmling', th: 'มังกรว่างเปล่าน้อย', bonus: { atkP: 5 }, c: '#2a2440', body: 'dragon' }
-  ];
-  for (const p of MORE_PETS) if (!D.PETS.find(x => x.k === p.k)) D.PETS.push(p);
-  const PET_R = { slime: 1, fox: 1, owl: 2, sprout: 1, golemling: 2, frostslime: 2, imp: 3, shadowbat: 3, wisp: 3, goldfox: 4, drake: 4, wyrmling: 5 };
-  const RAR = [{ n: 'ธรรมดา', t: 6, w: 52, c: '#8a96a8' }, { n: 'หายาก', t: 7, w: 28, c: '#3a8aff' }, { n: 'มหากาพย์', t: 8, w: 13, c: '#a85cff' }, { n: 'ตำนาน', t: 9, w: 5.5, c: '#ff9a1e' }, { n: 'ปฐมกาล', t: 10, w: 1.5, c: '#ff5ae8' }];
-  const rollR = (minR = 0) => { const L = RAR.slice(minR); const tot = L.reduce((a, r) => a + r.w, 0); let x = Math.random() * tot; for (let i = 0; i < L.length; i++) { x -= L[i].w; if (x <= 0) return i + minR; } return minR; };
-  const BOX = {
-    pet: { n: 'ไข่สัตว์เลี้ยง', d: 'สุ่มสัตว์เลี้ยง 12 แบบ · ตัวที่ซ้ำจะได้ทองคืน 30%', cost: 30000, icon: () => eggIcon('#ffe0b0', '#ff7a3a') },
-    fashion: { n: 'กล่องแฟชั่น', d: 'สุ่มชุดแฟชั่นทุกช่อง 10 ธีม', cost: 20000, icon: () => UI.itemIcon({ kind: 'fashion', slot: 'f_body', colors: ['#ff7ab0', '#ffffff'] }) },
-    cset: { n: 'กล่องชุดคลาส', d: 'สุ่มชิ้นส่วนชุดคลาสของคลาสปัจจุบัน ระดับ 6–10', cost: 60000, icon: () => UI.itemIcon({ cset: S.save ? S.save.cls : 'blademaster', slot: 'chest', tier: 9 }) },
-    wings: { n: 'กล่องปีก', d: 'สุ่มปีกแฟชั่น 10 ธีม ระดับ 6–10', cost: 40000, icon: () => UI.itemIcon({ kind: 'fashion', slot: 'f_wings', colors: ['#bff4ff', '#4a8aff'] }) }
-  };
-  function eggIcon(c1, c2) { return K.make('egg' + c1 + c2, k => { k.E(16, 17, 10, 13, c1); k.L(8, 18, 24, 14, 2, c2); k.C(12, 11, 2, '#ffffff'); k.C(21, 23, 2, c2); }, { spark: [[25, 6]] }); }
-  UI.gachaIcon = k => BOX[k].icon(); UI.GACHA_BOX = BOX; UI.GACHA_RAR = RAR;
-  const pull = (k) => { const s = S.save; s.gacha = s.gacha || { pity: {}, tix: 0 }; const pity = s.gacha.pity[k] = (s.gacha.pity[k] || 0) + 1; let ri = rollR(pity >= 30 ? 3 : pity % 10 === 0 ? 2 : 0); if (ri >= 3) s.gacha.pity[k] = 0; const r = RAR[ri];
-    if (k === 'pet') { const pool = D.PETS.filter(p => (PET_R[p.k] || 2) <= ri + 2 && (PET_R[p.k] || 2) >= Math.min(ri, 4)); const p = U.pick(pool.length ? pool : D.PETS); s.pets = s.pets || []; const dup = s.pets.includes(p.k); if (dup) s.gold += Math.round(BOX.pet.cost * 0.3); else s.pets.push(p.k); return { r, img: UI.petIcon(p.k), n: p.th + (dup ? ' (ซ้ำ +ทอง)' : ''), new: !dup }; }
-    if (k === 'fashion' && S.fashionPack) return S.fashionPack(r);
-    if (k === 'fashion' || k === 'wings') { const slot = k === 'wings' ? 'f_wings' : U.pick(D.FASHION_SLOTS).k; const it = S.genItem('fashion', r.t, 1, { slot }); s.fashion.owned.push(it); return { r, img: UI.itemIcon(it), n: it.name, it }; }
-    const it = S.genClassItem(s.cls, U.pick(PIECES), r.t, Math.min(100, Math.max(20, Math.round(s.lvl / 2) + r.t * 3))); S.addItem(it, true); return { r, img: UI.itemIcon(it), n: it.name, it };
-  };
   UI.PANELS.gacha = { title: 'สุ่มไข่ / กล่องสุ่ม', render(tab, P) { const s = S.save; s.gacha = s.gacha || { pity: {}, tix: 0 };
     return `<div class="gachapage"><div class="gboxes">${Object.entries(BOX).map(([k, b]) => `<div class="gbox"><div class="gimg"><img src="${b.icon()}" alt=""></div><b>${b.n}</b><small>${b.d}</small><small class="pity">การันตีมหากาพย์ทุก 10 ครั้ง · ตำนานภายใน 30 ครั้ง (นับ ${s.gacha.pity[k] || 0})</small>
       <div class="gbtns"><button class="sprice" data-act="g-pull" data-k="${k}" data-n="1"><img src="${UI.curIcon('gold')}" alt="">${U.fmt(b.cost)} ×1</button><button class="sprice" data-act="g-pull" data-k="${k}" data-n="10"><img src="${UI.curIcon('gold')}" alt="">${U.fmt(b.cost * 9)} ×10</button>${s.gacha.tix ? `<button class="sprice tix" data-act="g-pull" data-k="${k}" data-n="1" data-tix="1">ตั๋ว ×1 (มี ${s.gacha.tix})</button>` : ''}</div></div>`).join('')}</div>
@@ -179,4 +186,4 @@
     }
     S.persist(); UI.renderPanel();
   };
-})(window.G);
+});

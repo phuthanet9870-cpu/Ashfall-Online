@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['botpower'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Bot power rules:
    PvP: every difficulty has the SAME power (player CP). Difficulty = intelligence only; easy bots hesitate (attack sometimes, idle sometimes) and aim sloppily.
    Everywhere else: bots carry gear they "farmed" like a player (same drop tables / tiers for their level), or exactly the player's CP (GM setting). */
@@ -53,4 +65,6 @@
   // ---------- GM toggle ----------
   const gmR = UI.gmRender; UI.gmRender = (tab, P) => { let h = gmR(tab, P); if (tab === 'pvp') { const m = S.botPowerMode(); h = `<h4>พลังของบอท</h4><p class="muted">PvP: บอททุกระดับความยากมีพลัง (CP) เท่ากับผู้เล่น · ความยากเปลี่ยนแค่ความฉลาด ระดับง่ายจะตีบ้างไม่ตีบ้างและเล็งพลาด<br>นอก PvP (ยึดปราสาท สมาชิกกิลด์ ผู้เล่นในแผนที่ฟาร์ม):</p><div class="chips"><button class="chip ${m === 'farm' ? 'on' : ''}" data-act="gm" data-c="bpmode" data-v="farm">ใช้ของที่บอทฟาร์มมาเหมือนผู้เล่น</button><button class="chip ${m === 'equal' ? 'on' : ''}" data-act="gm" data-c="bpmode" data-v="equal">พลังเท่าผู้เล่นพอดี</button></div><table class="tbl small"><tr><th>ความยาก</th><th>พลัง</th><th>ช่วงลังเล/ไม่ตี</th><th>เล็งพลาด</th><th>ตอบสนอง</th></tr>${D.DIFFS.map(d => `<tr><td>${d.th}</td><td>×1.0</td><td>${Math.round(d.idle * 100)}%</td><td>±${d.miss} ช่อง</td><td>${d.react} วิ</td></tr>`).join('')}</table>` + h; } return h; };
   const gmC = UI.gmCmd; UI.gmCmd = (c, el) => { if (c === 'bpmode') { S.save.settings.botPower = el.dataset.v; S.persist(); UI.toast(el.dataset.v === 'farm' ? 'บอทนอก PvP ใช้ของที่ฟาร์มมา' : 'บอทนอก PvP พลังเท่าผู้เล่น', 'good'); UI.renderPanel(); return; } return gmC(c, el); };
-})(window.G);
+})(G);
+
+});

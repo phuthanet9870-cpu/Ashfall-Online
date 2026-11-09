@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['items3'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Item catalog: 100 unique designs for each of weapon · armor · accessory · relic · rune · gem · fashion (700 total).
    Each design has its own name, colours, icon motif, drop band and 1–2 signature stats; every copy rolls random stats
    (main value, number + kind + size of sub-stats, signature strength), so no two drops are the same.
@@ -97,4 +109,6 @@
       for (let i = 0; i < n; i++) { last = spawn(d, d.cat === 'fashion' ? 10 : (P.gt || 10), ilv, { pvp: true, theme: P.gth }); S.addItem(last, true); }
       UI.toast(`GM: ได้รับ ${last.name}${n > 1 ? ' ×' + n : ''} · คุณภาพ ${last.q}%`, 'item', last.tier); return; }
     return gmC(c, el); };
-})(window.G);
+})(G);
+
+});

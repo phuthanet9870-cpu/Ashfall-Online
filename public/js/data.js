@@ -1,7 +1,9 @@
 'use strict';
 /* Ashfall Online — game data: classes, skills, tiers, maps, dungeons, PvP, siege */
-window.G = window.G || {};
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['data'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   // ---------- utils ----------
   const U = G.U = {
     rnd: Math.random,
@@ -816,4 +818,4 @@ window.G = window.G || {};
     { id: 'siege1', th: 'ชนะศึกยึดปราสาท', bonus: { defP: 1 }, title: 'ผู้พิชิตปราสาท' }, { id: 'flawless', th: 'ชนะ Flawless 5-0', bonus: { atkP: 1 }, title: 'ผู้พิชิตไร้พ่าย' },
     { id: 'streak10', th: 'Kill Streak 10', bonus: { crit: 1 }, title: 'Godlike' }, { id: 'codex20', th: 'Codex ครบ 20 ชนิด', bonus: { drop: 2 }, title: 'นักสะสม' }
   ];
-})(window.G);
+});

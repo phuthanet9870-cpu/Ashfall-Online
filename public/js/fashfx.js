@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['fashfx'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Fashion FX v4 — detailed, glowing magic circles and wings (fashion only glows; heroes/NPCs stay crisp).
    Every design is rendered once per colour + screen scale into layers plus a soft glow copy (down/up-sampled blur,
    works in every browser). Circle layers counter-rotate; wings flap from the shoulder blades.
@@ -140,4 +152,6 @@
     else { x.save(); x.translate(32, 32); x.scale(1, it.slot === 'f_mcb' ? 1 : 0.62); x.globalCompositeOperation = 'lighter'; const c = circleSet(SLOTDES[it.slot][(it.mc || 0) % 3], a, b, 24); for (const L of [c.og, c.o, c.ig, c.i]) x.drawImage(L, -c.S / 2, -c.S / 2); x.restore(); }
     x.strokeStyle = '#6a5530'; x.strokeRect(0.5, 0.5, 63, 63); let url = ''; try { url = cv.toDataURL(); } catch (e) { } IC.set(key, url); return url; };
   const gen0 = G.S.genItem; G.S.genItem = (kind, tier, ilv, o = {}) => { const it = gen0(kind, tier, ilv, o); if (it && kind === 'fashion' && it.slot === 'f_wings') it.name = WNAMES[(it.theme || 0) % KINDS.length] + (it.tier >= 8 ? ' (ตำนาน)' : ''); else if (it && kind === 'fashion' && SLOTDES[it.slot]) it.name = NAMES[it.slot][(it.mc || 0) % 3] + (it.tier >= 8 ? ' (ตำนาน)' : ''); return it; };
-})(window.G);
+})(G);
+
+});

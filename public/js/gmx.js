@@ -19,13 +19,13 @@
       else { try { const [cv, x] = SPR.mk(sz, sz); x.imageSmoothingEnabled = false; const w = inf.w * sc, hh = inf.h * sc; x.drawImage(inf.img, inf.sx, inf.sy, inf.w, inf.h, (sz - w) / 2, sz - 1 - hh, w, hh); h = `<img class="gmsp" src="${cv.toDataURL()}" style="width:${sz}px;height:${sz}px" alt="">`; } catch (e) { } } }
     IC.set(k, h); return h; };
   // ---------- GM button above the dock, shown once /gmadmin2008 was used on this device ----------
-  const unlocked = () => { try { return localStorage.getItem('ashfall_gm') === '1'; } catch (e) { return !!G._gmU; } };
+  const unlocked = () => { try { return globalThis.ASHFALL_STORAGE.getItem('ashfall_gm') === '1'; } catch (e) { return !!G._gmU; } };
   const placeBtn = () => { const hud = $('#hud'), dock = $('#dock'); let b = $('#gmdock'); if (!unlocked() || !hud || !dock || !dock.offsetWidth) { if (b) b.hidden = true; return; }
     if (!b) { b = document.createElement('button'); b.id = 'gmdock'; b.title = 'GM Console'; b.innerHTML = `<img src="${UI.menuIcon('gm')}" alt=""><span>GM</span>`; b.addEventListener('click', e => { e.stopPropagation(); UI.openPanel('gm'); }); }
     if (b.parentNode !== hud) hud.appendChild(b); b.hidden = false; const hr = hud.getBoundingClientRect(), dr = dock.getBoundingClientRect();
     b.style.left = (dr.left - hr.left + 6) + 'px'; b.style.top = (dr.top - hr.top - 50) + 'px'; };
   setInterval(placeBtn, 400);
-  G.GMX = { monIcon, unlock() { G._gmU = true; try { localStorage.setItem('ashfall_gm', '1'); } catch (e) { } placeBtn(); }, lock() { G._gmU = false; try { localStorage.removeItem('ashfall_gm'); } catch (e) { } placeBtn(); } };
+  G.GMX = { monIcon, unlock() { G._gmU = true; try { globalThis.ASHFALL_STORAGE.setItem('ashfall_gm', '1'); } catch (e) { } placeBtn(); }, lock() { G._gmU = false; try { globalThis.ASHFALL_STORAGE.removeItem('ashfall_gm'); } catch (e) { } placeBtn(); } };
   // ---------- catalog of every monster ----------
   let ML = null; const list = () => { if (ML) return ML; ML = []; const seen = new Set(); const add = (md, grade, map) => { if (!md) return; const key = md.n + '|' + grade; if (seen.has(key)) return; seen.add(key); ML.push({ md, grade, map }); };
     D.FARM_MAPS.forEach((m, i) => { for (const md of m.mobs) add(md, 'normal', i); add(m.champ, 'champion', i); add(m.rare, 'rare', i); add(m.boss, 'boss', i); add(m.world, 'world', i); });

@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['gacha2'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Gacha only at the NPCs in front of the Aurelion fountain (one NPC per box), removed from the menu.
    New single-box window (showcase · rates · pity bars · ×1/×10) and a full-screen reveal animation:
    chest shakes → light burst → face-down cards flip one by one, glowing by rarity (click to skip / close). */
@@ -70,6 +82,7 @@
     timers.push(setTimeout(() => { fx.classList.add('cards'); }, 1450));
     res.forEach((x, i) => timers.push(setTimeout(() => { const c = fx.querySelectorAll('.g2c')[i]; if (c) c.classList.add('flip'); }, 1900 + i * (res.length > 1 ? 170 : 0))));
     timers.push(setTimeout(() => { stage = 3; fx.classList.add('done'); const h = fx.querySelector('.g2hint'); if (h) h.textContent = 'แตะเพื่อปิด'; }, 2100 + res.length * 170)); };
+  UI.gachaReveal = play;
   const a0 = UI.act; UI.act = (el, e) => { const a = el.dataset.act;
     const qv = () => { UI._g2q = { d: U.clamp(+(($('#g2qd') || {}).value) || 1, 1, 9999), t: U.clamp(+(($('#g2qt') || {}).value) || 1, 1, 9999) }; return UI._g2q; };
     if (a === 'g2-buyd') { const r = S.buyDiamond(qv().d); UI.toast(r.ok ? r.msg : r, r.ok ? 'good' : 'bad'); UI.renderPanel(); return; }
@@ -131,4 +144,6 @@
   .g2hint{position:absolute;bottom:22px;left:0;right:0;text-align:center;color:#c8bca0;font-size:13px;animation:g2p 1.4s ease-in-out infinite}@keyframes g2p{50%{opacity:.4}}
   @media (max-width:760px){.g2cards{grid-template-columns:repeat(3,96px);gap:8px}.g2cards.n1{grid-template-columns:130px}}`;
   document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

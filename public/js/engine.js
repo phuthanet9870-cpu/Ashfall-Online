@@ -1,6 +1,9 @@
 'use strict';
 /* Engine: maps, units, combat, skills, AI, pathfinding, rendering */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['engine'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, V = G.VFX, SPR = G.SPR;
   const W = G.W = { units: [], projs: [], zones: [], traps: [], loots: [], timers: [], dangers: [], map: null, time: 0, player: null, mode: null, cam: { x: 0, y: 0 }, hitstop: 0, slowmo: 0, slowT: 0, idc: 1, gm: { god: false, oneHit: false, speed: 1, time: 1, drop: 1, xp: 1, noCd: false, ai: true, debug: false } };
   const E = G.E = {};
@@ -931,4 +934,4 @@
     ctx.fillStyle = '#120e18'; ctx.fillRect(Math.round(sx) - 3, Math.round(sy) - 6 + bob, 7, 6); ctx.fillStyle = c; ctx.fillRect(Math.round(sx) - 2, Math.round(sy) - 5 + bob, 5, 4); ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(sx) - 2, Math.round(sy) - 5 + bob, 1, 1);
     if (l.tier >= 6 && Math.random() < 0.08) V.p(l.x + U.rf(-0.3, 0.3), l.y + U.rf(-0.3, 0.3), 4, 0, 0, 30, 0.6, 2, c);
   };
-})(window.G);
+});

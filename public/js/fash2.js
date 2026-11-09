@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['fash2'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Fashion v2: in the bag's Costume view the right side becomes the wardrobe (click to wear, hover for details),
    plus "wear best" which picks the highest-stat piece for every fashion slot. */
 (function (G) {
@@ -28,4 +40,6 @@
     if (a === 'f2-wear') { const it = S.save.fashion.owned.find(x => x.uid === el.dataset.uid); if (it) { S.fashionEquip(it); S.persist(); if (UI.panel) UI.panel.sel = it.uid; UI.renderPanel(); } return; }
     return a0(el, e); };
   const css = document.createElement('style'); css.textContent = `.f2top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}.f2top b{font-size:15px;color:#f2d27a}.f2cats{margin:4px 0 6px;flex-wrap:wrap}.f2sel{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding:8px;border:1px solid #4a3c22;border-radius:8px}.f2sel b{width:100%;color:#f2d27a}.f2hint{margin-top:8px;text-align:center}.f2r .icell.fwear{box-shadow:0 0 0 2px #f2d27a,0 0 10px rgba(242,210,122,.5)}`; document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

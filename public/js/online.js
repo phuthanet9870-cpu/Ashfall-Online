@@ -8,9 +8,10 @@
 (function (G) {
   const U = G.U, D = G.D, S = G.S, UI = G.UI, W = G.W, E = G.E, SPR = G.SPR; const esc = UI.esc; const $ = s => document.querySelector(s);
   const SERVERS = [['s1', 'Aurelion-1'], ['s2', 'Aurelion-2'], ['s3', 'Solaris'], ['s4', 'Umbra']];
-  const LS = 'ashfall_server'; const srv = () => { try { const v = localStorage.getItem(LS); if (SERVERS.some(s => s[0] === v)) return v; } catch (e) { } return 's1'; };
-  const setSrv = v => { try { localStorage.setItem(LS, v); } catch (e) { } };
+  const LS = 'ashfall_server'; const srv = () => { try { const v = globalThis.ASHFALL_STORAGE.getItem(LS); if (SERVERS.some(s => s[0] === v)) return v; } catch (e) { } return 's1'; };
+  const setSrv = v => { try { globalThis.ASHFALL_STORAGE.setItem(LS, v); } catch (e) { } };
   let room = null, cur = null, curKey = '', ghosts = new Map(), lastSay = new Map(), sendT = 0, status = 'offline';
+  G.ONLINE = { get roomKey() { return curKey; }, get channel() { return window.ASHFALL_NET?.channel || 1; } };
   const clean = s => String(s || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 30) || 'map';
   const keyNow = () => { const m = W.map, md = W.mode; if (!m || !W.player || !md || ['dungeon', 'pvp', 'siege', 'gallery'].includes(md.kind)) return ''; return `${srv()}-${clean(m.id)}`; };
   const lookOf = () => { const s = S.save; const f = s && s.fashion && s.fashion.eq && s.fashion.eq.f_wings; return { c: s.cls, w: f ? [f.theme || 0, f.dye || f.colors[0], f.colors[1], f.tier || 1] : null }; };
@@ -31,7 +32,7 @@
     const pr = { n: lobby.n, lv: s.lvl, x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100, fx: p.fx < 0 ? -1 : 1, fy: Math.round((p.fy || 0) * 10) / 10, mv: p.moving ? 1 : 0, dead: p.dead ? 1 : 0, hp: Math.round(100 * p.hp / p.maxhp), say, sid: say ? (p._sayId = p._sayId && p._lastSay === say ? p._sayId : (p._lastSay = say, Date.now())) : 0, ...lookOf() };
     cur.presence(pr).catch(() => { }); };
   // ---------- other players ----------
-  const sync = (peers) => { const seen = new Set(); if (!W.map) return;
+  const sync = (peers) => { if (G.SHARED_WORLD?.active) return; const seen = new Set(); if (!W.map) return;
     for (const pe of peers) { if (pe.isMe || pe.kind !== 'viewer') continue; const q = pe.presence || {}; if (typeof q.x !== 'number' || typeof q.y !== 'number') continue; seen.add(pe.peer);
       let g = ghosts.get(pe.peer); const cls = D.CLS[q.c] ? q.c : 'blademaster';
       if (!g || g.cls !== cls || W.units.indexOf(g) < 0) { if (g) { const i = W.units.indexOf(g); if (i >= 0) W.units.splice(i, 1); }
@@ -52,7 +53,7 @@
       <h4>เลือกเซิร์ฟเวอร์</h4><div class="onsrv">${SERVERS.map(([id, n]) => `<button class="onsv ${id === me ? 'on' : ''}" data-act="on-srv" data-v="${id}"><b>${esc(n)}</b><small>${room ? cnt(id) + ' คนออนไลน์' : '—'}</small></button>`).join('')}</div>
       <h4>ผู้เล่นออนไลน์ใน ${esc((SERVERS.find(s => s[0] === me) || SERVERS[0])[1])} (${list.length})</h4>
       <table class="tbl small"><tr><th>ชื่อ</th><th>อาชีพ</th><th>เลเวล</th><th>อยู่ที่</th></tr>${list.map(q => `<tr><td>${esc(String(q.n).slice(0, 14))}</td><td>${esc((D.CLS[q.c] || {}).name || '-')}</td><td>${q.lv | 0}</td><td>${esc(mapName(q.map))}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">ยังไม่มีใครออนไลน์ในเซิร์ฟเวอร์นี้</td></tr>'}</table>
-      <p class="muted">พิมพ์แชท: กด Enter · ข้อความจะขึ้นบนหัวและในช่องแชทของทุกคนในแมพเดียวกัน · ตัวละคร กระเป๋า และเซฟยังเก็บในเครื่องของแต่ละคน</p>`; } };
+      <p class="muted">พิมพ์แชท: กด Enter · ข้อความจะขึ้นบนหัวและในช่องแชทของทุกคนในแมพเดียวกัน · ตัวละคร กระเป๋า และเซฟยังแยกในเครื่องของแต่ละคน · ${G.SHARED_WORLD?.active ? (G.SHARED_WORLD.ready ? 'แมพฟาร์มใช้สถานะกลางจากเซิร์ฟเวอร์ · ของดรอปใครเก็บก่อนคนนั้นได้' : 'กำลังรอสถานะแมพจากเซิร์ฟเวอร์') : 'โหมดนี้ยังใช้การจำลองต่อสู้ในเครื่อง'}</p>`; } };
   const a0 = UI.act; UI.act = (el, e) => { if (el.dataset.act === 'on-srv') { setSrv(el.dataset.v); curKey = '__'; switchRoom(keyNow()); UI.toast(`ย้ายไปเซิร์ฟเวอร์ ${(SERVERS.find(s => s[0] === el.dataset.v) || [])[1]}`, 'good'); UI.renderPanel(); return; } return a0(el, e); };
   const badgeEl = document.createElement('button'); badgeEl.id = 'onbadge'; badgeEl.dataset.act = 'panel'; badgeEl.dataset.p = 'online'; document.body.appendChild(badgeEl);
   const badge = () => { const ps = lobbyPeers().filter(p => (p.presence || {}).srv === srv()).length; const n = (SERVERS.find(s => s[0] === srv()) || SERVERS[0])[1]; badgeEl.innerHTML = `<i class="${window.ASHFALL_NET && !window.ASHFALL_NET.connected ? 'reconnecting' : status}"></i>${esc(n)} · ${ps} ออนไลน์`; badgeEl.hidden = !W.player; };

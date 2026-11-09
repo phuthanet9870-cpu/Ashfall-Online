@@ -2,7 +2,10 @@
 /* Class-set ultimates v2 — each one is a bespoke, stateful ability that stays on the field for several seconds
    (a sun that keeps dropping fireballs, a storm cloud that follows you, a time-stop that stores damage …),
    with its own persistent visual. No two share a mechanic. */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['setult2'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, V = G.VFX;
   const R = (a, b) => a + Math.random() * (b - a);
   const foes = (u, x, y, r) => W.units.filter(t => !t.dead && E.isEnemy(u, t) && E.targetable(u, t) && U.d2(t.x, t.y, x, y) <= r * r);
@@ -127,10 +130,10 @@
     const h0 = E.hit; E.hit = (src, t, pow, s, o) => { if (t && t.suGuardT > W.time) pow *= 0.5; if (t && t.apexMarkT > W.time) { const own = src && (src.owner || src); if (own && own.team === t.apexMarkBy) pow *= 1.2; }
       if (t && t.suTime && !t.suTime.done) { const hp = t.hp; const r = h0(src, t, pow, s, o); const d = Math.max(0, hp - t.hp); if (d > 0) { t.hp = hp; t.suTime.store.set(t, (t.suTime.store.get(t) || 0) + d); } return r; } return h0(src, t, pow, s, o); };
   };
-  document.addEventListener('DOMContentLoaded', install); setTimeout(install, 0);
+  if (G.headless) install(); else { document.addEventListener('DOMContentLoaded', install); setTimeout(install, 0); }
   const S = G.S; if (S && S.enter) { const en0 = S.enter; S.enter = (m) => { for (const st of ST) st.done = true; ST.length = 0; return en0(m); }; }
   // descriptions + set text
   for (const c of D.CLASSES) { const d = D30[c.id]; if (d && c.setUlt) { c.setUlt.suTh = d.th; c.setUlt.c = Math.max(c.setUlt.c || 70, 60); } }
   const ds0 = D.descSkill; D.descSkill = (s) => s && s.setUlt && s.suTh ? `อัลติเมตชุดคลาส · คูลดาวน์ ${s.c} วิ · ${s.suTh}` : ds0(s);
   for (const set of (D.CLASS_SETS || [])) { const c = D.CLS[set.cls]; if (c && c.setUlt && set.th && set.th[2]) set.th[2] = `ปลดล็อกอัลติเมตชุดคลาส «${c.setUlt.name}» [Shift+5] — ${D30[set.cls] ? D30[set.cls].th : ''}`; }
-})(window.G);
+});

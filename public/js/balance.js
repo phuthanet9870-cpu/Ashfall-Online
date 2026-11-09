@@ -6,7 +6,10 @@
    · Monster ATK follows the expected hero HP/DEF curve (a same-level normal mob takes ~3.5 % HP per hit after armor);
      monster HP is raised by exactly the armor change so kill speed stays the same and grows a little past Lv100.
    · Per-class damage multipliers (D.CLS_DMG) bring every class to the same damage band (tanks a bit lower). */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['balance'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, S = G.S, W = G.W;
   const K = lv => Math.max(650, 200 + 45 * (lv || 1));
   E.defK = (src) => K(src && (src.lvl || (src.owner && src.owner.lvl)));
@@ -28,4 +31,4 @@
   const RAW = {"blademaster":1.71,"guardian":1.79,"berserker":0.88,"paladin":1.33,"pyromancer":0.83,"cryomancer":0.52,"stormcaller":0.59,"necromancer":0.73,"cleric":1.17,"druid":1.71,"assassin":1.05,"shadowdancer":1.24,"ranger":1.72,"marksman":1.8,"engineer":1,"monk":1.3,"spellblade":1.12,"beastmaster":0.83,"chronomancer":1.48,"warlock":0.61,"starhunter":0.57,"darkknight":0.75,"lightbringer":0.68,"shadowmancer":1.19,"seraph":1.36,"reaper":0.91,"demon":0.81,"deity":0.77,"jester":1.24,"loki":0.54};
   D.CLS_DMG = Object.assign({}, D.CLS_DMG || {}); for (const k in RAW) D.CLS_DMG[k] = Math.round(Math.pow(RAW[k], 0.8) * 100) / 100;
   const h0 = E.hit; E.hit = (src, t, pow, s, o) => { const own = src && (src.owner || src); const m = own && own.kind === 'hero' && own.cls ? (D.CLS_DMG[own.cls] || 1) : 1; return h0(src, t, m === 1 ? pow : pow * m, s, o); };
-})(window.G);
+});

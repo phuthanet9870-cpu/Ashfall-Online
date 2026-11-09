@@ -7,10 +7,12 @@
   "scripts": {
     "start": "node server/server.mjs",
     "worker:dev": "wrangler dev",
-    "worker:deploy": "wrangler deploy"
+    "worker:deploy": "wrangler deploy",
+    "test": "node --test tests/*.test.mjs",
+    "build:itch": "python3 scripts/package-release.py"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "ws": "^8.18.0"

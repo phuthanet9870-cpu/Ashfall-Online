@@ -2,7 +2,10 @@
 /* Elemental affinity: 7 element families with a counter cycle.
    ไฟ → ธรรมชาติ → พายุ → น้ำแข็ง → ไฟ (each beats the next) · แสง ⇄ มืด (beat each other) · same family resists · กลาง neutral.
    Advantage ×1.3 · disadvantage ×0.75 · same family ×0.85. Applies to every hit: skills, basic attacks, monsters and bosses. */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['elements'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, V = G.VFX, UI = G.UI;
   const FAM = {
     fire: { th: 'ไฟ', c: '#ff7a3a', icon: 'flame', els: ['fire', 'infernal', 'fel'] },
@@ -29,6 +32,7 @@
       if (own.kind === 'hero' && t.kind === 'hero' && D.CLS[own.cls] && D.CLS[t.cls]) pow *= D.roleMult(D.CLS[own.cls].role, D.CLS[t.cls].role);
       if (m !== 1) { pow *= m; if (E.vis(t.x, t.y) && (own === W.player || t === W.player) && W.time - (t._elT || -9) > 1.2) { t._elT = W.time; V.text(t.x, t.y, m > 1 ? 'WEAK!' : 'RESIST', m > 1 ? '#ffd84a' : '#9aa0b8', { size: m > 1 ? 9 : 7, z: 44 }); } }
       return h0(src, t, pow, s, o); }; };
+  if (G.headless) { install(); return; }
   document.addEventListener('DOMContentLoaded', install); setTimeout(install, 0);
   // ---------- UI: target frame badge + element chart ----------
   const badge = (e) => { const f = FAM[D.famOf(e)]; return `<span class="elb" style="--c:${f.c}">${f.th}</span>`; };
@@ -47,4 +51,4 @@
   const css = document.createElement('style'); css.textContent = `.elb{display:inline-block;padding:0 6px;border-radius:8px;font-size:11px;font-weight:700;color:#1a1424;background:var(--c);margin:0 2px;line-height:16px}
   #telem{display:flex;gap:6px;align-items:center;margin-top:2px;font-size:11px}#telem small.good{color:#ffd84a}#telem small.bad{color:#ff8a8a}.elcycle{margin:8px 0;font-size:13px}`;
   document.head.appendChild(css);
-})(window.G);
+});

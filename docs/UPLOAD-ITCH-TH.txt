@@ -1,0 +1,41 @@
+Ashfall Online — ชุดสำหรับ itch.io
+
+1. ติดตั้ง backend ให้ตรงรุ่นก่อนเปิดให้ผู้เล่นเข้า
+   แตก ashfall-worker.zip ลงเครื่องที่มี Node.js 20 ขึ้นไป แล้วรัน:
+     npm ci
+     npx wrangler login
+     npm run deploy
+   ใช้บัญชี Cloudflare เดิมถ้าต้องการรักษาฐานข้อมูลเดิม
+   URL ที่หน้าเกมชุดนี้ตั้งไว้คือ:
+     wss://ashfall-online.phuthanet9870.workers.dev/ws
+   หาก deploy แล้วได้ชื่ออื่น ต้องตั้ง URL ให้ตรงแล้วสร้าง ZIP ใหม่จาก ashfall-source.zip:
+     npm ci
+     npx wrangler deploy --dry-run --outdir .wrangler/online-build
+     python3 scripts/package-release.py --ws wss://ชื่อของคุณ.workers.dev/ws
+   ไฟล์ใหม่จะอยู่ใน dist/ashfall-itch.zip
+
+2. อัปโหลดหน้าเกม
+   itch.io > Edit game > Kind of project: HTML
+   อัปโหลด ashfall-itch.zip โดยตรง ไม่ต้องแตกไฟล์ และไม่ต้อง zip ซ้ำ
+   เลือก "This file will be played in the browser"
+   ตั้งขนาด 1280 x 720 เปิด Fullscreen และ Mobile friendly แล้ว Save
+   ทดสอบแบบ Draft ก่อนเปลี่ยนเป็น Public
+   ห้ามอัปโหลด ashfall-worker.zip หรือ ashfall-source.zip เป็นหน้าเกม
+
+3. เข้าเล่น
+   เปิดหน้าเกมบน itch.io > Run game > สมัครบัญชีหรือเข้าสู่ระบบ
+   รหัสผ่านอย่างน้อย 8 ตัวอักษร > สร้าง/เลือกตัวละคร > เข้าเมือง
+   ถ้าเล่นด้วยกัน ให้เลือกเซิร์ฟเวอร์และแชนแนลเดียวกัน
+
+เซฟเดิม: รับเข้าครั้งเดียวต่อตัวละคร เก็บของและเลเวลเดิม หลังจากนั้นใช้ข้อมูลบนเซิร์ฟเวอร์
+ALLOW_LEGACY_IMPORT เปิดโดยปริยาย เมื่อย้ายครบให้ตั้งเป็น "0" ใน [vars] ของ wrangler.toml และ deploy ใหม่
+การล้างข้อมูลเบราว์เซอร์อาจทำให้ guest กู้คืนไม่ได้ ควรสมัครบัญชีก่อนเล่นจริง
+หากเบราว์เซอร์บล็อก storage ใน iframe ยังเล่นด้วยบัญชีได้ แต่ต้องล็อกอินใหม่เมื่อเปิดหน้าเกมอีกครั้ง
+
+ชุดนี้ผ่านการทดสอบในเครื่องพัฒนา ยังไม่ได้ deploy backend จริงจากเซสชันนี้
+ZIP หน้าเว็บอย่างเดียวไม่สามารถรัน WebSocket server บน itch.io ได้
+หาก backend ยังเป็นรุ่นเก่า เกมจะยังเข้าโลกออนไลน์รุ่นใหม่นี้ไม่ได้
+
+โค้ดครบรวม frontend/backend/tests/workflows อยู่ใน ashfall-source.zip
+Node server ทางเลือก: แตก source, npm ci, npm start (พอร์ต 8080)
+ถ้าเปิด Node ให้คนภายนอก ต้องตั้ง HTTPS/WSS และเก็บ data/store.json บนดิสก์ถาวร

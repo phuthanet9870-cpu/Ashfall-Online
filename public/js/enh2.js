@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['enh2'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Items v3: every drop rolls its own stats (main ±, each sub ×0.75–1.25, chance of an extra sub, shown as quality %);
    enhancement +1 … +10 where each level adds a random bonus option; option-reroll stone (หินสุ่มออปชั่น);
    map bosses hit far harder (HP ×7, ATK ×2.4, enrage under 35 % HP). */
@@ -44,4 +56,6 @@
       if (u && (grade === 'champion' || grade === 'rare')) { u.st.hp = Math.round(u.st.hp * 2); u.maxhp = u.st.hp; u.hp = u.maxhp; u.st.atk = Math.round(u.st.atk * 1.4); }
       return u; }; return M; };
   setInterval(() => { for (const u of W.units) if (u.mapBoss && !u.dead && !u.enraged && u.hp < u.maxhp * 0.35) { u.enraged = true; u.st.atk = Math.round(u.st.atk * 1.5); u.moveSpd *= 1.3; u.atkRate *= 0.75; if (G.VFX && E.vis && E.vis(u.x, u.y)) { G.VFX.ring(u.x, u.y, 4, ['#ffffff', '#ff4a4a', '#8a0a1a'], 0.8, { w: 5 }); G.VFX.shake && G.VFX.shake(6, 0.5); } UI.toast(`${u.name} คลั่ง! พลังโจมตีเพิ่มขึ้น`, 'bad'); } }, 400);
-})(window.G);
+})(G);
+
+});

@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['costume'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Costumes v2: every fashion slot renders on the character (wings by theme, aura, footstep trail, floating orb …),
    new Magic Circles worn on the head / under the feet / on the back (3 designs each), a magic-circle gacha box,
    and junk loot from monsters (sold for gold). */
@@ -179,7 +191,7 @@
   const ir0 = UI.PANELS.inv && UI.PANELS.inv.render; if (ir0) UI.PANELS.inv.render = function (tab, P) { const h = ir0.call(this, tab, P); if (tab !== 'bag') return h; const s = S.save; const J = Object.entries(s.junk || {}).filter(([, c]) => c > 0);
     return h + `<h4>ไอเทมขยะ (ขายได้ที่ไหนก็ได้)</h4><div class="bgrid">${J.length ? J.map(([k, c]) => { const j = JUNK.find(x => x[0] === k) || [k, k, 1]; return `<div class="bcard t1" title="${esc(j[1])} · ${j[2]} ทอง/ชิ้น"><div class="icell t1"><img src="${UI.junkIcon(k)}" alt=""><span class="qty">${c}</span></div><span>${esc(j[1])}</span></div>`; }).join('') : '<p class="muted">ยังไม่มีขยะ — ได้จากการกำจัดมอนสเตอร์</p>'}</div>${J.length ? '<button class="btn primary" data-act="junk-sell">ขายขยะทั้งหมด</button>' : ''}`; };
   // auto-sell junk when the bag is opened from a shop NPC is not needed: one button sells all
-})(window.G);
+})(G);
 // ---------- fashion now grants stats (scales with the item's tier) ----------
 (function (G) {
   const D = G.D, E = G.E, UI = G.UI, S = G.S;
@@ -191,4 +203,6 @@
   const det0 = UI.itemDetail; UI.itemDetail = (it, actions) => { let h = det0(it, actions); if (it && it.kind === 'fashion' && FS[it.slot]) h = h.replace('<div class="iact">', `<div class="iset"><b>ค่าพลังแฟชั่น</b><div>${statsOf(it).map(([k, v]) => `${TH[k] || k} +${v}%`).join(' · ')}</div></div><div class="iact">`); return h; };
   // re-apply stats when fashion changes
   const a0 = UI.act; UI.act = (el, e) => { const r = a0(el, e); const a = el.dataset && el.dataset.act; if ((a === 'fashequip' || a === 'fashremove') && S.refreshPlayer) try { S.refreshPlayer(); } catch (er) { } return r; };
-})(window.G);
+})(G);
+
+});

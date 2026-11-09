@@ -1,6 +1,9 @@
 'use strict';
 /* Unique skill abilities: every skill gets its own special mechanic ("rider") on top of its attack pattern */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['riders'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, W = G.W, V = G.VFX;
   const RD = G.RD = {};
   const SUPPORT_ARCH = { buff: 1, shield: 1, heal: 1, stealth: 1, summon: 1, turret: 1 };
@@ -217,4 +220,4 @@
   };
   RD.canFlee = (u, dt) => { if (!u.fearT || u.fearT < now() || !u.fearFrom) return false; const a = Math.atan2(u.y - u.fearFrom.y, u.x - u.fearFrom.x) + Math.sin(now() * 3 + u.id) * 0.5; G.E.walkTo(u, u.x + Math.cos(a) * 2, u.y + Math.sin(a) * 2, dt, 0.1); return true; };
   RD.taunted = (u) => { if (u.tauntT && u.tauntT > now() && u.tauntBy && !u.tauntBy.dead) { u.target = u.tauntBy; return true; } return false; };
-})(window.G);
+});

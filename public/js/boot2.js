@@ -7,9 +7,9 @@
 (function (G) {
   const S = G.S, UI = G.UI, D = G.D; const $ = s => document.querySelector(s); const esc = UI.esc;
   const SERVERS = [['s1', 'Aurelion-1'], ['s2', 'Aurelion-2'], ['s3', 'Solaris'], ['s4', 'Umbra']];
-  const LS = { get: (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
-  const srv = () => { try { const v = localStorage.getItem('ashfall_server'); if (SERVERS.some(s => s[0] === v)) return v; } catch (e) { } return 's1'; };
-  const setSrv = v => { try { localStorage.setItem('ashfall_server', v); } catch (e) { } };
+  const LS = { get: (k, d) => { try { const v = JSON.parse(globalThis.ASHFALL_STORAGE.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } }, set: (k, v) => { try { globalThis.ASHFALL_STORAGE.setItem(k, JSON.stringify(v)); } catch (e) { } } };
+  const srv = () => { try { const v = globalThis.ASHFALL_STORAGE.getItem('ashfall_server'); if (SERVERS.some(s => s[0] === v)) return v; } catch (e) { } return 's1'; };
+  const setSrv = v => { try { globalThis.ASHFALL_STORAGE.setItem('ashfall_server', v); } catch (e) { } };
   const norm = s => String(s || '').trim().toLowerCase();
   const hash = async (salt, pw) => { const t = salt + ':' + pw; try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); } catch (e) { let h = 0x811c9dc5; for (let r = 0; r < 4000; r++) for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619) >>> 0; return 'f' + h.toString(16); } };
   const rnd = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => x.toString(16).padStart(2, '0')).join('');
@@ -31,21 +31,25 @@
   const srvRow = () => `<div class="b2srv">${SERVERS.map(([id, n]) => `<button class="${id === srv() ? 'on' : ''}" data-b2="srv" data-v="${id}">${esc(n)}</button>`).join('')}</div>`;
   const login = (tab) => { mode = 'login'; const P = LS.get('ashfall_prefs', {}); tab = tab || 'main';
     if (tab === 'main') box.innerHTML = `${logo}<div class="b2card"><h3>เข้าสู่ระบบ</h3><p class="b2s">เลือกเซิร์ฟเวอร์</p>${srvRow()}
-      <button class="b2btn g" data-b2="google"><b>G</b>เข้าสู่ระบบด้วย Google</button>
       <button class="b2btn" data-b2="tab" data-v="acc">🔑 เข้าสู่ระบบด้วยบัญชีและรหัสผ่าน</button>
       <button class="b2btn ghost" data-b2="guest">👤 เล่นแบบผู้เยี่ยมชม</button><p class="b2msg"></p>
-      <p class="b2fine">ผู้เยี่ยมชม: ตัวละครเก็บในเบราว์เซอร์นี้ · สร้างบัญชีภายหลังได้</p></div>`;
-    else box.innerHTML = `${logo}<div class="b2card"><h3>บัญชีของฉัน</h3>${srvRow()}<input class="b2in" id="b2acc" maxlength="32" placeholder="ชื่อบัญชี" value="${esc(P.lastAcc || '')}" autocomplete="username"><div class="b2pw"><input class="b2in" id="b2pw" type="password" maxlength="64" placeholder="รหัสผ่าน (อย่างน้อย 4 ตัว)" autocomplete="current-password"><button data-b2="eye" title="แสดงรหัสผ่าน">👁</button></div>
+      <p class="b2fine">${globalThis.ASHFALL_STORAGE.persistent ? 'เซฟเก็บบนเซิร์ฟเวอร์ · บัญชีใช้เล่นข้ามเครื่องได้' : 'เบราว์เซอร์นี้ไม่เก็บการเข้าสู่ระบบ · ใช้บัญชีเพื่อกลับมาเล่นตัวละครเดิม'}</p></div>`;
+    else box.innerHTML = `${logo}<div class="b2card"><h3>บัญชีของฉัน</h3>${srvRow()}<input class="b2in" id="b2acc" maxlength="32" placeholder="ชื่อบัญชี" value="${esc(P.lastAcc || '')}" autocomplete="username"><div class="b2pw"><input class="b2in" id="b2pw" type="password" maxlength="64" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัว)" autocomplete="current-password"><button data-b2="eye" title="แสดงรหัสผ่าน">👁</button></div>
       <label class="b2chk"><input type="checkbox" id="b2rem" ${P.remember !== false ? 'checked' : ''}> จดจำชื่อบัญชี</label>
       <div class="b2row"><button class="b2btn g" data-b2="login">เข้าสู่ระบบ</button><button class="b2btn" data-b2="register">สร้างบัญชีใหม่</button></div>
       <div class="b2row sm"><button class="b2link" data-b2="forgot">ลืมรหัสผ่าน?</button><button class="b2link" data-b2="tab" data-v="main">← ย้อนกลับ</button></div><p class="b2msg"></p></div>`;
     setTimeout(() => { const a = $('#b2acc'); if (a) (a.value ? $('#b2pw') : a).focus(); }, 30); };
   const enter = (id, name, how) => { G.ACC = { id, name, how, server: srv() }; S.useSlots && S.useSlots(how === 'guest' ? null : id + '@' + srv()); const P = LS.get('ashfall_prefs', {}); P.lastHow = how; LS.set('ashfall_prefs', P); hide(); UI.showTitle(); };
   const accts = () => LS.get('ashfall_accounts', {}); const saveA = a => LS.set('ashfall_accounts', a);
-  const doLogin = async (create) => { const name = ($('#b2acc').value || '').trim(), id = norm(name), pw = $('#b2pw').value || ''; if (id.length < 3) return msg('ชื่อบัญชีต้องมีอย่างน้อย 3 ตัวอักษร', 'bad'); if (pw.length < 4) return msg('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร', 'bad');
-    const A = accts(); const P = LS.get('ashfall_prefs', {}); P.remember = $('#b2rem').checked; P.lastAcc = P.remember ? name : ''; LS.set('ashfall_prefs', P);
-    if (create) { if (A[id]) return msg('มีชื่อบัญชีนี้แล้ว ลองเข้าสู่ระบบ', 'bad'); const sl = rnd(12); A[id] = { name, salt: sl, h: await hash(sl, pw), created: Date.now() }; saveA(A); return enter(id, name, 'acc'); }
-    if (!A[id]) return msg('ไม่พบบัญชีนี้ — กด "สร้างบัญชีใหม่"', 'bad'); if (await hash(A[id].salt, pw) !== A[id].h) return msg('รหัสผ่านไม่ถูกต้อง', 'bad'); enter(id, A[id].name, 'acc'); };
+  const doLogin = async create => {
+    const name=($('#b2acc').value||'').trim(),pw=$('#b2pw').value||'',NET=window.ASHFALL_NET;
+    if(name.length<3||pw.length<8)return msg('ชื่อบัญชีอย่างน้อย 3 ตัว รหัสผ่านอย่างน้อย 8 ตัว','bad');
+    if(!NET?.connected||NET.features?.onlineAuthority!==2)return msg('กำลังรอเซิร์ฟเวอร์ออนไลน์ กรุณาลองอีกครั้ง','bad');
+    msg('กำลังตรวจสอบบัญชี…');
+    try { const result=await NET.request({t:create?'account_register':'account_login',username:name,password:pw});
+      enter(result.username,result.username,'acc');S.mergeOnlineSlots?.(result.characters);UI.showTitle();
+    } catch(e){msg(e.message,'bad');}
+  };
   const google = async () => { const cfg = window.ASHFALL_FIREBASE; if (!cfg) { msg('เข้าสู่ระบบด้วย Google ใช้ได้เมื่อเปิดเกมจากเว็บไซต์ของเกม (ต้องตั้งค่า Firebase ก่อน) — ตอนนี้เลือกบัญชีหรือผู้เยี่ยมชมได้', 'warn'); return; }
     try { msg('กำลังเชื่อมต่อ Google…'); const load = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
       if (!window.firebase) { await load('https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js'); await load('https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js'); }
@@ -54,14 +58,14 @@
   const guest = () => { let g = LS.get('ashfall_guest', null); if (!g) { g = { id: 'guest_' + rnd(6), name: 'ผู้เยี่ยมชม' + Math.floor(1000 + Math.random() * 9000) }; LS.set('ashfall_guest', g); } enter(g.id, g.name, 'guest'); };
   root.addEventListener('click', async e => { if (mode === 'cover') { if (loaded) login(); else loading(); return; } const el = e.target.closest('[data-b2]'); if (!el) return; const a = el.dataset.b2;
     if (a === 'srv') { setSrv(el.dataset.v); root.querySelectorAll('.b2srv button').forEach(b => b.classList.toggle('on', b.dataset.v === el.dataset.v)); return; }
-    if (a === 'tab') return login(el.dataset.v); if (a === 'guest') return guest(); if (a === 'google') return google(); if (a === 'login') return doLogin(false); if (a === 'register') return doLogin(true);
+    if (a === 'forgot') return msg('ติดต่อผู้ดูแลเซิร์ฟเวอร์เพื่อกู้บัญชี รหัสผ่านไม่ได้เก็บในเบราว์เซอร์','warn'); if (a === 'tab') return login(el.dataset.v); if (a === 'guest') return guest(); if (a === 'google') return google(); if (a === 'login') return doLogin(false); if (a === 'register') return doLogin(true);
     if (a === 'eye') { const p = $('#b2pw'); p.type = p.type === 'password' ? 'text' : 'password'; return; }
     if (a === 'forgot') { const id = norm(($('#b2acc') || {}).value); const A = accts(); if (!A[id]) return msg('ใส่ชื่อบัญชีที่มีอยู่ก่อน', 'bad'); const pw = ($('#b2pw') || {}).value || ''; if (pw.length < 4) return msg('พิมพ์รหัสผ่านใหม่ในช่องรหัสผ่าน แล้วกด "ลืมรหัสผ่าน?" อีกครั้ง', 'warn'); A[id].salt = rnd(12); A[id].h = await hash(A[id].salt, pw); saveA(A); msg('ตั้งรหัสผ่านใหม่แล้ว — กดเข้าสู่ระบบ', 'good'); } });
   root.addEventListener('keydown', e => { if (e.key === 'Enter' && mode === 'login' && $('#b2pw')) { e.preventDefault(); doLogin(false); } });
   addEventListener('keydown', e => { if (!root.hidden && mode === 'cover' && !e.repeat) { if (loaded) login(); else loading(); } });
   // integrate
   const st0 = UI.showTitle; UI.showTitle = function () { if (!G.ACC) { cover(); return; } hide(); const r = st0.apply(this, arguments); const h = document.querySelector('#title-screen .rohead'); if (h && !h.querySelector('.b2acct')) h.insertAdjacentHTML('beforeend', `<span class="b2acct">${G.ACC.how === 'guest' ? '👤' : G.ACC.how === 'google' ? 'G' : '🔑'} ${esc(G.ACC.name)} · ${esc((SERVERS.find(s => s[0] === srv()) || SERVERS[0])[1])}</span><button class="btn" data-act="b2-logout">ออกจากระบบ</button>`); return r; };
-  const a0 = UI.act; UI.act = (el, e) => { if (el.dataset.act === 'b2-logout') { try { S.save && S.persist(); } catch (er) { } S.save = null; G.ACC = null; S.useSlots && S.useSlots(null); show(); login(); return; } return a0(el, e); };
+  const a0 = UI.act; UI.act = (el, e) => { if (el.dataset.act === 'b2-logout') { window.ASHFALL_NET?.send({t:'account_logout'}); globalThis.ASHFALL_STORAGE.removeItem('ashfall_session'); if(window.ASHFALL_NET)window.ASHFALL_NET.sessionToken=''; try { S.save && S.persist(); } catch (er) { } S.save = null; G.ACC = null; S.useSlots && S.useSlots(null); show(); login(); return; } return a0(el, e); };
   const gt0 = S.goTown; S.goTown = function () { hide(); return gt0.apply(this, arguments); };
   setInterval(() => { if (!root.hidden && G.W && G.W.player && G.W.mode) hide(); }, 400);
   G.BOOT = { enter: (name = 'tester') => { G.ACC = { id: norm(name), name, how: 'acc', server: srv() }; S.useSlots && S.useSlots(norm(name) + '@' + srv()); hide(); }, cover, login };

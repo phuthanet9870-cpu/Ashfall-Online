@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['vault'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Storage (คลังเก็บของ): when the bag is full, new items go to storage automatically. Starts with 500 slots;
    +100 slots for 10,000 gold (no upper limit). Open from the menu or the bag window; click an item to move it back. */
 (function (G) {
@@ -41,4 +53,6 @@
   #pbody:has(> .invpage){overflow:hidden;display:flex;flex-direction:column}#pbody:has(> .invpage) > .invpage{flex:1;min-height:0;height:auto}
   #pbody:has(> .invpage) .invl{overflow-y:auto;overflow-x:hidden;min-height:0}#pbody:has(> .invpage) .invr{min-height:0;overflow:hidden}
   #pbody:has(> .invpage) .invgrid{overflow-y:auto;min-height:0;flex:1 1 0}`; document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

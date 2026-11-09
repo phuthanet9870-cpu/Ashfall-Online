@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['items2'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* 500 named item bases (gear / accessories / runes): 20 materials × slot designs, each with own look, tier band and signature bonus */
 (function (G) {
   const U = G.U, D = G.D, S = G.S, UI = G.UI;
@@ -100,4 +112,6 @@
     if (c === 'gmbase') { const b = B.find(x => x.id === el.dataset.k); if (!b) return; const t = U.clamp(P.gt || b.tmin, b.tmin, b.tmax); const it = S.genItem(b.kind, t, P.gilv || 100, { slot: b.slot, color: b.color, base: b.id, pvp: true }); S.addItem(it, true); UI.toast(`GM: ได้รับ ${it.name}`, 'item', it.tier); return; }
     return gmC(c, el);
   };
-})(window.G);
+})(G);
+
+});

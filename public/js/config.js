@@ -2,6 +2,7 @@
 //   ws: 'wss://ashfall-online.YOUR-NAME.workers.dev/ws'
 // Leave it empty when the game is served by the Node server itself (same host → /ws).
 window.ASHFALL_CFG = {
-  ws: 'wss://ashfall-online.phuthanet9870.workers.dev/ws',
-  noBots: true   // online build: no fake players in towns/fields (PvP / guild war / world boss keep their AI teams)
+  ws: ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? '' : 'wss://ashfall-online.phuthanet9870.workers.dev/ws',
+  sharedWorld: true,
+  noBots: true   // online build: real players; monsters and guards remain server-controlled NPCs
 };

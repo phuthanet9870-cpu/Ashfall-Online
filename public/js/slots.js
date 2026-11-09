@@ -4,12 +4,13 @@
   const U = G.U, D = G.D, S = G.S, UI = G.UI, W = G.W;
   const $ = s => document.querySelector(s), esc = UI.esc;
   const OLD = 'ashfall_save_v1', BASE = 'ashfall_slots_v2', N = 6; let KEY = BASE;
-  const migrateAcc = () => { try { if (KEY !== BASE) return; const cur = JSON.parse(localStorage.getItem(BASE) || 'null'); if (cur && Array.isArray(cur.slots) && cur.slots.some(Boolean)) return; let best = null, bn = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k || !k.startsWith(BASE + '@')) continue; const o = JSON.parse(localStorage.getItem(k) || 'null'); const n = o && Array.isArray(o.slots) ? o.slots.filter(Boolean).length : 0; if (n > bn) { bn = n; best = k; } } if (best) localStorage.setItem(BASE, localStorage.getItem(best)); } catch (e) { } };
-  const read = () => { migrateAcc(); try { if (KEY !== BASE && !localStorage.getItem(KEY) && localStorage.getItem(BASE) && !localStorage.getItem('ashfall_legacy_claimed')) { localStorage.setItem(KEY, localStorage.getItem(BASE)); localStorage.setItem('ashfall_legacy_claimed', KEY); } } catch (e) { } try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o && Array.isArray(o.slots)) { while (o.slots.length < N) o.slots.push(null); return o; } } catch (e) { } const o = { active: 0, slots: Array(N).fill(null) }; try { const old = JSON.parse(localStorage.getItem(OLD) || 'null'); if (KEY === BASE && old && old.cls) o.slots[0] = old; } catch (e) { } return o; };
-  const write = o => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { UI.toast && UI.toast('บันทึกไม่สำเร็จ (พื้นที่เบราว์เซอร์เต็ม)', 'bad'); } };
+  const migrateAcc = () => { try { if (KEY !== BASE) return; const cur = JSON.parse(globalThis.ASHFALL_STORAGE.getItem(BASE) || 'null'); if (cur && Array.isArray(cur.slots) && cur.slots.some(Boolean)) return; let best = null, bn = 0; for (let i = 0; i < globalThis.ASHFALL_STORAGE.length; i++) { const k = globalThis.ASHFALL_STORAGE.key(i); if (!k || !k.startsWith(BASE + '@')) continue; const o = JSON.parse(globalThis.ASHFALL_STORAGE.getItem(k) || 'null'); const n = o && Array.isArray(o.slots) ? o.slots.filter(Boolean).length : 0; if (n > bn) { bn = n; best = k; } } if (best) globalThis.ASHFALL_STORAGE.setItem(BASE, globalThis.ASHFALL_STORAGE.getItem(best)); } catch (e) { } };
+  const read = () => { migrateAcc(); try { if (KEY !== BASE && !globalThis.ASHFALL_STORAGE.getItem(KEY) && globalThis.ASHFALL_STORAGE.getItem(BASE) && !globalThis.ASHFALL_STORAGE.getItem('ashfall_legacy_claimed')) { globalThis.ASHFALL_STORAGE.setItem(KEY, globalThis.ASHFALL_STORAGE.getItem(BASE)); globalThis.ASHFALL_STORAGE.setItem('ashfall_legacy_claimed', KEY); } } catch (e) { } try { const o = JSON.parse(globalThis.ASHFALL_STORAGE.getItem(KEY) || 'null'); if (o && Array.isArray(o.slots)) { while (o.slots.length < N) o.slots.push(null); return o; } } catch (e) { } const o = { active: 0, slots: Array(N).fill(null) }; try { const old = JSON.parse(globalThis.ASHFALL_STORAGE.getItem(OLD) || 'null'); if (KEY === BASE && old && old.cls) o.slots[0] = old; } catch (e) { } return o; };
+  const write = o => { try { globalThis.ASHFALL_STORAGE.setItem(KEY, JSON.stringify(o)); } catch (e) { UI.toast && UI.toast('บันทึกไม่สำเร็จ (พื้นที่เบราว์เซอร์เต็ม)', 'bad'); } };
   let ST = read(); write(ST);
   // per account + server character storage (login screen)
   S.useSlots = (k) => { KEY = k ? BASE + '@' + k : BASE; ST = read(); write(ST); SEL = null; };
+  S.mergeOnlineSlots = rows => { for (const row of rows || []) { if(!row.save)continue; let i=ST.slots.findIndex(s=>s?._worldCharacter===row.character); if(i<0)i=ST.slots.findIndex(s=>!s); if(i>=0)ST.slots[i]=row.save; } write(ST); };
   S.slots = () => ST.slots; S.activeSlot = () => ST.active;
   S.load = () => ST.slots[ST.active] || null;
   S.persist = () => { if (!S.save) return; S.save.lastPlayed = Date.now(); ST.slots[ST.active] = S.save; write(ST); };
@@ -40,7 +41,7 @@
     t.innerHTML = `<div class="title-wrap slots-wrap"><div class="logo small"><span class="l1">ASHFALL</span><span class="l2">ONLINE</span></div>
       <div class="create rocreate slotwin"><div class="rohead"><span class="pemb"><img src="${UI.menuIcon('char')}" alt=""></span><b>เลือกตัวละคร</b><small>${used}/${N} ตัวละคร · ใช้ได้ ${N} สล็อต จาก ${TOTAL}</small></div>
       <div class="slotlay"><div class="slotgrid">${Array.from({ length: TOTAL }, (_, i) => card(i)).join('')}</div>${info()}</div>
-      <p class="muted">เล่นออฟไลน์ในเบราว์เซอร์ · ผู้เล่นอื่นเป็น AI · แต่ละตัวละครมีเลเวล กระเป๋า กิลด์ และเซฟแยกกัน</p></div></div>`;
+      <p class="muted">เล่นออนไลน์ · เซฟและกระเป๋าเก็บถาวรบนเซิร์ฟเวอร์ · ข้อมูลส่วนตัวแยกตามบัญชีและตัวละคร</p></div></div>`;
   };
   const sw0 = UI.showCreate; UI.showCreate = () => { sw0(); const h = $('#title-screen .rohead'); if (h && !h.querySelector('.slback')) h.insertAdjacentHTML('beforeend', `<button class="btn slback" data-act="sl-back">← กลับไปเลือกสล็อต (สร้างที่สล็อต ${ST.active + 1})</button>`); };
   const act0 = UI.act;

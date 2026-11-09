@@ -1,13 +1,17 @@
 'use strict';
 /* Monsters from "64x Detailed Fantasy Monsters – 48×48 Pixel Art Pack" (Pixel-Deck): replaces every regular monster
    (normal / champion / rare on all 20 maps, dungeons and boss adds) with a themed sprite + procedural animation. */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['monsters48'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, SPR = G.SPR; const MAN = G.MON48; if (!MAN) return;
+  const mdOf = (i, old) => { const e = MAN.list[i]; return Object.assign({}, old || {}, { n: e.n, px: i, body: 'px48', c: e.c, c2: U.shade ? U.shade(e.c, -0.35) : e.c, ranged: e.ranged }); };
+  for (const def of D.FARM_MAPS) { const m = MAN.maps[def.id]; if (!m) continue; def.mobs = m.mobs.map((i, k) => mdOf(i, def.mobs[k])); def.champ = mdOf(m.champ, def.champ); def.rare = mdOf(m.rare, def.rare); }
+  if (G.headless) return;
   const base = (() => { const s = [...document.scripts].find(x => /js\/monsters48\.js/.test(x.src)); return s ? s.src.replace(/js\/monsters48\.js.*$/, '') : ''; })();
   const IMG = new Image(); IMG.src = base + 'assets/monsters/mon48.png'; G.MON48.img = IMG;
   const C = MAN.cell, COLS = MAN.cols;
-  const mdOf = (i, old) => { const e = MAN.list[i]; return Object.assign({}, old || {}, { n: e.n, px: i, body: 'px48', c: e.c, c2: U.shade ? U.shade(e.c, -0.35) : e.c, ranged: e.ranged }); };
-  for (const def of D.FARM_MAPS) { const m = MAN.maps[def.id]; if (!m) continue; def.mobs = m.mobs.map((i, k) => mdOf(i, def.mobs[k])); def.champ = mdOf(m.champ, def.champ); def.rare = mdOf(m.rare, def.rare); }
   const isPx = u => u && u.md && u.md.px != null && !u.md.duel;
   const GSC = { normal: 1, elite: 1.1, champion: 1.28, rare: 1.15 };
   E.MON48 = { isPx };
@@ -45,4 +49,4 @@
   const ui0 = E.drawUnitUI; if (ui0) E.drawUnitUI = (ctx, u, ...a) => { if (isPx(u)) { const e = MAN.list[u.md.px]; const h = (e.bb[3] - e.bb[1]) * (GSC[u.grade] || 1); const j = u.jz || 0; u.jz = j + Math.max(0, h - 30); const r = ui0(ctx, u, ...a); u.jz = j; return r; } return ui0(ctx, u, ...a); };
   // credit
   const UI = G.UI; if (UI && UI.PANELS && UI.PANELS.settings) { const r0 = UI.PANELS.settings.render; UI.PANELS.settings.render = function (tab, P) { return r0.call(this, tab, P) + '<p class="muted">Monsters: 64x Detailed Fantasy Monsters – 48×48 Pixel Art Pack (Pixel-Deck)</p>'; }; }
-})(window.G);
+});

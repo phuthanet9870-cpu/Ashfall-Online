@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['city'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Aurelion v2 — a large city map: walled capital in the centre (4 gates, plaza, street grid, houses), roads radiating
    to the map edges, two rivers with wooden bridges, a lake, farmland plots, outlying villages, light woodland,
    monsters roaming only OUTSIDE the walls, and warp gates at the ends of the roads to other maps. */
@@ -207,7 +219,7 @@
   // protect the inside of the walls: monsters never deal damage there and cannot enter
   const install = () => { if (E._city) return; E._city = true; const h0 = E.hit; E.hit = (src, t, pow, s, o) => { const m = W.map; if (m && m.id === 'aurelion' && m.inWall && t && t.kind === 'hero') { const own = src && (src.owner || src); if (own && own.kind === 'mob' && m.inWall(t.x, t.y, 0)) return 0; } return h0(src, t, pow, s, o); }; };
   document.addEventListener('DOMContentLoaded', install); setTimeout(install, 0);
-})(window.G);
+})(G);
 // ---------- villages, save points, new-player tutorial, single main city ----------
 (function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, S = G.S, SPR = G.SPR, V = G.VFX, UI = G.UI; const $ = s => document.querySelector(s);
@@ -259,7 +271,7 @@
   document.addEventListener('DOMContentLoaded', install); setTimeout(install, 0);
   // old saves: skip tutorial
   const ld = S.load; if (ld) S.load = function () { const s = ld.apply(this, arguments); if (s && s.tut == null) s.tut = 99; if (s && s.lastTown === 'haven') s.lastTown = 'aurelion'; return s; };
-})(window.G);
+})(G);
 // ---------- village NPCs, city NPC districts + names, main-map quest chain ----------
 (function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, S = G.S, SPR = G.SPR, V = G.VFX, UI = G.UI;
@@ -316,7 +328,7 @@
       O.save(); if (d > 10) { const a = Math.atan2(g.y - p.y, g.x - p.x); const [px, py] = cam.w2s(p.x, p.y); const cx = px * F + Math.cos(a) * 64, cy = (py - 14) * F + Math.sin(a) * 64; O.translate(cx, cy); O.rotate(a); O.fillStyle = '#7af0ff'; O.beginPath(); O.moveTo(12, 0); O.lineTo(-6, -7); O.lineTo(-6, 7); O.fill(); O.rotate(-a); O.font = '600 11px Kanit, sans-serif'; O.textAlign = 'center'; O.fillText('ภารกิจ ' + Math.round(d) + ' ช่อง', 0, 20); }
       else if (E.vis(g.x, g.y)) { const [sx, sy] = cam.w2s(g.x, g.y); O.fillStyle = '#7af0ff'; O.font = '700 18px Kanit, sans-serif'; O.textAlign = 'center'; O.fillText('!', sx * F, (sy - 40 - Math.abs(Math.sin(W.time * 4)) * 6) * F); } O.restore(); }; };
   setInterval(() => { try { rt(); } catch (e) { } }, 300);
-})(window.G);
+})(G);
 // ---------- living world: bot players leave the city to farm, explore, travel between villages and chat ----------
 (function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, S = G.S, V = G.VFX;
@@ -339,4 +351,6 @@
   // wandering players are friendly to you and to each other; they only fight monsters
   const inst = () => { if (E._wbots) return; E._wbots = true; const ie = E.isEnemy; E.isEnemy = (a, b) => { if (a && b && (a.wanderBot || b.wanderBot)) { const o = a.wanderBot ? b : a; return o.kind === 'mob' && ie(a, b); } return ie(a, b); }; };
   document.addEventListener('DOMContentLoaded', inst); setTimeout(inst, 0);
-})(window.G);
+})(G);
+
+});

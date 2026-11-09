@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['inv2'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Sell by tier/type (+ sell all, item lock) and class-aware auto-equip for gear, accessories, relic, runes and gems */
 (function (G) {
   const U = G.U, D = G.D, S = G.S, UI = G.UI, W = G.W;
@@ -112,4 +124,6 @@
     }
     S.persist(); UI.renderPanel();
   };
-})(window.G);
+})(G);
+
+});

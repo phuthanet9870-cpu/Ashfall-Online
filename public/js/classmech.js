@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['classmech'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Class mechanics: every class has its own resource/gimmick that no other class has, and each of its 24 skills plays a
    distinct role with it (build / spend / empower / finisher / overload). Works for players and bots alike. */
 (function (G) {
@@ -94,4 +106,6 @@
   // class mechanic in the skills panel and knowledge book
   if (UI.PANELS && UI.PANELS.skills) { const r0 = UI.PANELS.skills.render; UI.PANELS.skills.render = function (tab, P) { const p = W.player; const m = p && M[p.cls]; return (m ? `<div class="cmbox" style="border-left:4px solid ${m.c};padding:6px 10px;margin:4px 0 8px;background:rgba(0,0,0,.04)"><b>กลไกประจำคลาส: ${UI.esc(m.n)}</b> (สูงสุด ${m.max})<br><small>${UI.esc(m.d)}</small></div>` : '') + r0.call(this, tab, P); }; }
   if (UI.PANELS && UI.PANELS.wiki) { const P = UI.PANELS.wiki; P.tabs = P.tabs.concat([['mech', 'กลไกประจำคลาส']]); const r0 = P.render; P.render = function (tab, Pn) { if (tab !== 'mech') return r0.call(this, tab, Pn); return `<p class="muted">ทุกคลาสมีกลไกเฉพาะตัวที่ไม่ซ้ำกับคลาสอื่น และสกิลแต่ละช่องใช้กลไกต่างกัน: สะสม / ใช้แต้ม / เสริมพลัง / ปิดท้าย / เติมเต็ม</p><table class="tbl"><tr><th>คลาส</th><th>กลไก</th><th>รายละเอียด</th></tr>${D.CLASSES.map(c => M[c.id] ? `<tr><td><b>${UI.esc(c.name)}</b></td><td style="color:${M[c.id].c};text-shadow:0 0 1px #000">${UI.esc(M[c.id].n)}</td><td>${UI.esc(M[c.id].d)}</td></tr>` : '').join('')}</table>`; }; }
-})(window.G);
+})(G);
+
+});

@@ -1,7 +1,10 @@
 'use strict';
 /* Skill layout v2 for every class: 15 attack skills · 5 buff skills · 4 ultimates · 1 class-set ultimate (25 slots).
    Existing skills are kept (re-slotted by type) and every class gets new, themed skills to fill its kit. */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['skills25'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const D = G.D;
   D.NSK = 25; D.SET_IDX = 24; D.ATK_N = 15; D.BUFF0 = 15; D.ULT0 = 20;
   D.SLOT_KIND = i => i < 15 ? 'atk' : i < 20 ? 'buff' : i < 24 ? 'ult' : 'set';
@@ -71,4 +74,4 @@
     cls.specs = all.map(o => o.sp); cls.srcIdx = all.map(o => o.src);
     cls.skills = all.map((o, i) => { const s = D.parseSkill(o.sp, i, cls); s.src = o.src; s.gen = !!o.gen; s.unlock = D.UNLOCK[i]; const kd = D.SLOT_KIND(i); s.m = kd === 'atk' ? 3 + Math.min(12, i) : kd === 'buff' ? 12 : 35; if (kd === 'ult') { s.ult = true; s.flags.u = true; } return s; });
   }
-})(window.G);
+});

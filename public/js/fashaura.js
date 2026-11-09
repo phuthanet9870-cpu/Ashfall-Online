@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['fashaura'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Fashion set auras: the fashion box now gives a whole themed PACK (8 pieces of one theme). Clothing pieces no longer
    change the hero's look; wearing all 8 pieces of the same theme lights up that theme's own aura (the only thing on a
    hero that glows). Higher-tier sets get denser, brighter auras.
@@ -117,4 +129,6 @@
   const css2 = document.createElement('style'); css2.textContent = `.f2page .dbody,.f2page .dped{display:none!important}.fprev{display:block;width:100%;max-width:260px;height:260px;margin:0 auto}.fpvb{display:flex;justify-content:center;gap:4px;margin-top:2px}.fpvb .chip{padding:2px 8px;font-size:11px}`; document.head.appendChild(css2);
   const css = document.createElement('style'); css.textContent = `.fsetban{margin:0 0 8px;padding:8px 10px;border:1px solid #4a3c22;border-radius:8px;background:linear-gradient(90deg,#1c160f,#110d09)}.fsetban b{display:block;color:#d8c8a0}.fsetban.full{border-color:#f2d27a;box-shadow:0 0 12px rgba(242,210,122,.3)}.fsetban.full b{color:#ffe9a8}.fsetban small{color:#9a8a6a;font-size:11px}.fsets{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.fsets .chip{border-color:var(--sc)}.fpbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;padding:6px;border:1px dashed #a8843a;border-radius:8px}.f2r [data-picked]{box-shadow:0 0 0 2px #4affd8,0 0 10px rgba(74,255,216,.5)!important}`;
   document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

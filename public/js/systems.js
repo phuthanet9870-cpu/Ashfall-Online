@@ -1,6 +1,9 @@
 'use strict';
 /* Systems: save/profile, items, stats, loot, economy, quests, codex, mercs, guild data, player control */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['systems'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, V = G.VFX, SPR = G.SPR;
   const S = G.S = {};
   const KEY = 'ashfall_save_v1';
@@ -18,9 +21,9 @@
     guild: null, rivals: [], mercs: {}, mercPresets: [[], [], []], pvp: { wins: 0, losses: 0, mmr: 1000 }, infamy: 0,
     settings: { ps: 0, quality: 1, autoPot: true, autoSell: false, autoLoot: true }, stats: { kills: 0, floors: 0, deaths: 0 }, foods: {}, created: Date.now(), lastTown: 'haven'
   });
-  S.load = () => { try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (e) { } return null; };
-  S.persist = () => { if (!S.save) return; try { localStorage.setItem(KEY, JSON.stringify(S.save)); } catch (e) { } };
-  S.wipe = () => { try { localStorage.removeItem(KEY); } catch (e) { } };
+  S.load = () => { try { const s = globalThis.ASHFALL_STORAGE.getItem(KEY); if (s) return JSON.parse(s); } catch (e) { } return null; };
+  S.persist = () => { if (!S.save) return; try { globalThis.ASHFALL_STORAGE.setItem(KEY, JSON.stringify(S.save)); } catch (e) { } };
+  S.wipe = () => { try { globalThis.ASHFALL_STORAGE.removeItem(KEY); } catch (e) { } };
   S.exportSave = () => JSON.stringify(S.save);
   S.importSave = (txt) => { const o = JSON.parse(txt); if (!o || !o.cls) throw new Error('bad'); S.save = o; S.persist(); };
 
@@ -402,4 +405,4 @@
     E.heroAI(u, dt, ctl);
     if (u.target) S.select(u.target);
   };
-})(window.G);
+});

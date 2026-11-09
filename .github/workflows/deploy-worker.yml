@@ -2,13 +2,19 @@ name: Deploy Cloudflare Worker
 on:
   push:
     branches: [main]
-    paths: ['worker/**', 'server/core.mjs', 'wrangler.toml', '.github/workflows/deploy-worker.yml']
+    paths: ['worker/**', 'server/**', 'public/js/**', 'tests/**', 'package.json', 'package-lock.json', 'wrangler.toml', '.github/workflows/deploy-worker.yml']
   workflow_dispatch:
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

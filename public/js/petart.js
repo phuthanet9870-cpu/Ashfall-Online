@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['petart'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Pets & mounts from the artist sheets (assets/pets/<key>.webp): 12 pets (idle / walk / action) and 4 mounts
    (idle / walk / run). Drawn crisp on the character layer; pets follow the player, react with their action loop in
    combat; mounts carry the hero on the saddle and run while moving. Old procedural pets/mounts keep working. */
@@ -46,4 +58,6 @@
   const sp1 = S.setupPet; S.setupPet = function () { migrate(); return sp1.apply(this, arguments); };
   for (const k in MAN) img(k);
   G.PETART = { ready, drawArt };
-})(window.G);
+})(G);
+
+});

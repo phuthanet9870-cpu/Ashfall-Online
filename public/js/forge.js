@@ -1,4 +1,16 @@
 'use strict';
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['forge'] = init;
+  if (typeof window !== 'undefined') init(window.G);
+})(function (G) {
+  const document = G.headless ? G.platform.document : globalThis.document;
+  const window = G.headless ? G.platform.window : globalThis.window;
+  const Image = G.headless ? G.platform.Image : globalThis.Image;
+  const localStorage = G.headless ? G.platform.localStorage : globalThis.ASHFALL_STORAGE;
+  const setTimeout = G.headless ? G.platform.setTimeout : globalThis.setTimeout;
+  const setInterval = G.headless ? G.platform.setInterval : globalThis.setInterval;
+  const addEventListener = G.headless ? (() => {}) : globalThis.addEventListener;
+'use strict';
 /* Blacksmith forge v2 — three tabs in one framed page:
    · ตีบวก: anvil stage with the item on a glowing ring, 10 level pips, a circular success gauge, stat preview,
      material slots and a big hammer button; success / failure flash with the result text.
@@ -129,4 +141,6 @@
   @keyframes fgres{0%{opacity:0;transform:translate(-50%,8px)}12%{opacity:1;transform:translate(-50%,0)}80%{opacity:1}100%{opacity:0}}@keyframes fgshine{0%,60%{left:-60%}100%{left:130%}}
   @media (max-width:900px){.fg{grid-template-columns:1fr}.fg-list{max-height:180px}.fg-stage{width:180px;height:180px}.fg-rolls{grid-template-columns:1fr}}`;
   document.head.appendChild(css);
-})(window.G);
+})(G);
+
+});

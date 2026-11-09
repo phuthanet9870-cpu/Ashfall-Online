@@ -1,6 +1,9 @@
 'use strict';
 /* Game modes + map generators: town, farm, dungeon, pvp, siege, gallery */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['modes'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, V = G.VFX, SPR = G.SPR, S = G.S;
   const MAP_ELEM = ['nature', 'phys', 'nature', 'poison', 'ice', 'fire', 'ice', 'wind', 'shadow', 'fel', 'nature', 'blood', 'ice', 'tech', 'poison', 'lightning', 'death', 'holy', 'shadow', 'arcane'];
 
@@ -767,4 +770,4 @@
     };
     return M;
   };
-})(window.G);
+});

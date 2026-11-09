@@ -1,7 +1,10 @@
 'use strict';
 /* Passive skills: 5 per class (Lv 1 / 30 / 80 / 150 / 220). Real effects for players and bots alike,
    shown as a vertical icon column on the left side of the screen. */
-(function (G) {
+(function (init) {
+  (globalThis.ASHFALL_SIM_FACTORIES ||= {})['passives'] = init;
+  if (typeof window !== 'undefined') init(window.G ||= {});
+})(function (G) {
   const U = G.U, D = G.D, E = G.E, W = G.W, S = G.S, V = G.VFX, UI = G.UI, FX = G.FX;
   D.PASSIVE_LV = [1, 30, 80, 150, 220];
   const TH = { blademaster: ['Steel', 'Iaido', 'Sakura', 'Heaven', 'Sword Saint'], guardian: ['Bastion', 'Aegis', 'Granite', 'Oath', 'Citadel'], berserker: ['Blood', 'Savage', 'Bone', 'Warlord', 'Carnage'],
@@ -71,6 +74,7 @@
     for (const e of E.enemiesNear(a, t.x, t.y, 1.8)) { E.hit(a, e, v / 100, s, { pv: 1 }); if (cc.burn) { E.hit(a, e, 0.25, s, { pv: 1 }); } else if (!cc.heal) E.applyCC(a, e, cc); }
     if (cc.heal) a.hp = Math.min(a.maxhp, a.hp + a.maxhp * 0.03);
     if (E.vis(t.x, t.y) && G.FX6) { G.FX6.mini(a, t.x, t.y, 0, 1); V.ring && V.ring(t.x, t.y, 1.8, (G.FX6.PAL[a.cls] || D.ELEM[cls.elem].pal), 0.4, { w: 3 }); } };
+  if (G.headless) { install(); return; }
   document.addEventListener('DOMContentLoaded', install); setTimeout(install, 0);
 
   // ---------- icons + HUD column ----------
@@ -107,7 +111,7 @@
   // skills panel: passive section
   if (UI.PANELS && UI.PANELS.skills) { const r0 = UI.PANELS.skills.render; UI.PANELS.skills.render = function (tab, P) { const h = r0.call(this, tab, P); const p = W.player; if (!p) return h; const L = D.CLS[p.cls].passives;
     return `<h4>แพสซีฟ (${L.filter(x => p.lvl >= x.lv).length}/5)</h4><div class="skrows">${L.map(x => `<div class="skrow ${p.lvl >= x.lv ? '' : 'locked'}"><img src="${UI.passiveIcon(p.cls, x)}" alt=""><div class="skinfo"><b>${UI.esc(x.name)}</b> <small>แพสซีฟ · Lv${x.lv}</small><p>${UI.esc(x.th)}</p></div></div>`).join('')}</div>` + h; }; }
-})(window.G);
+});
 // keep the squad command bar just above the (now two-row) action bar
-(function (G) { const fit = () => { const ab = document.getElementById('actionbar'), cb = document.getElementById('cmdbar'); if (!ab || !cb) return; const r = ab.getBoundingClientRect(); if (!r.height) return; const b = Math.round(innerHeight - r.top + 6); if (cb._b !== b) { cb._b = b; cb.style.bottom = b + 'px'; } };
+if (typeof window !== 'undefined') (function (G) { const fit = () => { const ab = document.getElementById('actionbar'), cb = document.getElementById('cmdbar'); if (!ab || !cb) return; const r = ab.getBoundingClientRect(); if (!r.height) return; const b = Math.round(innerHeight - r.top + 6); if (cb._b !== b) { cb._b = b; cb.style.bottom = b + 'px'; } };
   const rh = G.UI.refreshHud; G.UI.refreshHud = function () { const r = rh.apply(this, arguments); fit(); return r; }; addEventListener('resize', () => setTimeout(fit, 50)); })(window.G);
