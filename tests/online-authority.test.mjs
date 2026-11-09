@@ -179,3 +179,9 @@ test('GM quick kit uses shared game item rules and the resulting equipment persi
  await f.send(a,{t:'online_gm',id:'kit-once',command:'kit2'});assert.ok(f.last(a,'online_gm_result'));assert.equal(s.record.save.eq.weapon.tier,10);assert.equal(s.record.save.eq.weapon.lv,10);assert.ok(s.world.sim.members.get(s.record.id).unit.st.atk>0);
  const saved=await f.service.characters.docs.read(f.service.characters.key(s.record.id));assert.equal(saved.save.eq.weapon.uid,s.record.save.eq.weapon.uid);
 });
+
+test('GM skill edits broadcast shared rules to every participant and persist through checkpoints',async()=>{
+ const f=fixture(),a=f.client('gm-rule-owner'),b=f.client('gm-rule-viewer');await f.enter(a);await f.enter(b);await f.send(a,{t:'online_gm_unlock',code:'gmadmin2008'});const s=f.service.sessions.get(a),w=s.world.sim;
+ await f.send(a,{t:'online_gm',id:'rules-1',command:'skset',input:{panel:{gc:'guardian',gs:0},values:{gsp:5,gsc:2,gsr:2,gsR:3,gsn:1,gsd:1,gsv:1,gscc:''}}});await f.tick();
+ assert.equal(f.last(b,'online_rules').rules['guardian:0'].p,5);const cp=w.checkpoint(),restored=createWorldRuntime(cp.desc,{checkpoint:cp});assert.equal(restored.G.D.CLS.guardian.skills[0].p,5);
+});

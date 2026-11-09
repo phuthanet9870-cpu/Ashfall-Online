@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths: ['worker/**', 'server/**', 'public/js/**', 'tests/**', 'package.json', 'package-lock.json', 'wrangler.toml', '.github/workflows/deploy-worker.yml']
   workflow_dispatch:
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,10 +20,15 @@ jobs:
       - run: npm test
       - uses: cloudflare/wrangler-action@v3
         id: deploy
+        env:
+          RELEASE_SHA: ${{ github.sha }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          vars: |
+            RELEASE_SHA
       - name: Verify deployed online authority
         env:
+          ASHFALL_EXPECTED_RELEASE: ${{ github.sha }}
           ASHFALL_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
         run: node tests/deployment-smoke.mjs

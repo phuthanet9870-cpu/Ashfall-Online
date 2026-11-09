@@ -25,7 +25,7 @@ const storage = {
 };
 setInterval(() => { if (!dirty) return; dirty = false; durableWrite(db); }, 5000);
 const hash = async s => Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(s))).toString('hex');
-const core = createCore({ storage, hash, allowLegacyImport: process.env.ALLOW_LEGACY_IMPORT !== '0', roomCap: +process.env.ROOM_CAP || 60 });
+const core = createCore({ storage, hash, release: process.env.RELEASE_SHA || 'local', allowLegacyImport: process.env.ALLOW_LEGACY_IMPORT !== '0', roomCap: +process.env.ROOM_CAP || 60 });
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.woff2': 'font/woff2', '.cur': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: true, ...core.stats() })); }

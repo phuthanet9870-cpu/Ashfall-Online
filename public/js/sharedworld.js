@@ -38,7 +38,10 @@
     m.walls=g.walls.map(w=>({...w,x:w.tx+.5,y:w.ty+.5,img:SPR.wallBlock(w.color,18)}));
     m.chunks?.clear();E.renderMapCanvas(m);currentMap=m;
   }
-  NET.on('online_ready',m=>{if(!SW.active||m.request!==request||m.character!==currentCharacter)return;SW.room=m.room;SW.channel=m.channel||1;SW._siegePhase=null;SW.playerId=m.playerId;SW.ready=true;SW.revision=-1;SW._effects=new Set();SW._predict=false;if(m.mode.kind==='pvp')W.mode=S.PvPMode({mode:m.mode.id,map:m.mode.map,size:m.mode.size,diff:1,normalized:m.mode.normalized,mercs:false});geometry(m.geometry);apply(m);});
+  const ruleDefaults=new Map(),ruleKeys=new Set();
+  function rules(values){for(const key of ruleKeys){const[cls,slot]=key.split(':');D.CLS[cls].skills[slot]=structuredClone(ruleDefaults.get(key));}ruleKeys.clear();for(const[key,value]of Object.entries(values||{})){const[cls,slot]=key.split(':');if(!D.CLS[cls]?.skills[slot])continue;if(!ruleDefaults.has(key))ruleDefaults.set(key,structuredClone(D.CLS[cls].skills[slot]));D.CLS[cls].skills[slot]=structuredClone(value);ruleKeys.add(key);}UI.refreshSkillIcons?.();}
+  NET.on('online_rules',m=>{if(SW.ready&&m.room===SW.room)rules(m.rules);});
+  NET.on('online_ready',m=>{if(!SW.active||m.request!==request||m.character!==currentCharacter)return;SW.room=m.room;SW.channel=m.channel||1;SW._siegePhase=null;SW.playerId=m.playerId;SW.ready=true;SW.revision=-1;SW._effects=new Set();SW._predict=false;rules(m.rules);if(m.mode.kind==='pvp')W.mode=S.PvPMode({mode:m.mode.id,map:m.mode.map,size:m.mode.size,diff:1,normalized:m.mode.normalized,mercs:false});geometry(m.geometry);apply(m);});
   NET.on('online_geometry',m=>{if(SW.ready&&m.room===SW.room)geometry(m.geometry);});
   NET.on('online_state',m=>{if(SW.ready&&m.room===SW.room)apply(m);});
   function apply(m){const state=m.state;if(!state||state.revision<SW.revision)return;SW.revision=state.revision;const seen=new Set();

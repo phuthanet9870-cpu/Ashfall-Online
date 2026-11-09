@@ -15,7 +15,7 @@ const sanitize = (d) => { if (!d || typeof d !== 'object' || Array.isArray(d)) r
     else if (Array.isArray(v)) o[kk] = v.slice(0, 8).map(x => typeof x === 'number' ? x : clamp(x, 12)); }
   return o; };
 
-export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFriends = 100, maxGuild = 50, allowLegacyImport = true }) {
+export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFriends = 100, maxGuild = 50, allowLegacyImport = true, release = 'local' }) {
   const clients = new Set(); let budgetTime=Date.now();
   const channels = new Map();          // "room#n" → { room, n, members:Set, dirty:Set, gone:[] }
   const online = new Map();            // pid → client
@@ -255,7 +255,7 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
   };
   // ---------- host API ----------
   return {
-    connect(sock) { const c = { id: Math.random().toString(16).slice(2, 14), sock, pid: null, lp: null, rooms: new Map(), rp: new Map(), rps: new Map(), budget: 80 }; clients.add(c); send(c, { t: 'hi', id: c.id, features: { sharedFarm: 1, onlineAuthority: 2, serverGM: 1, snapshotHz: 10 } }); return c; },
+    connect(sock) { const c = { id: Math.random().toString(16).slice(2, 14), sock, pid: null, lp: null, rooms: new Map(), rp: new Map(), rps: new Map(), budget: 80 }; clients.add(c); send(c, { t: 'hi', id: c.id, features: { sharedFarm: 1, onlineAuthority: 2, serverGM: 1, snapshotHz: 10, release } }); return c; },
     async message(c, data) { if (--c.budget < 0) return; if ((typeof data === 'string' ? data.length : data?.byteLength || 0) > 2 * 1024 * 1024) return; let m; try { m = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)); } catch (e) { return; } if (!m || typeof m !== 'object' || typeof m.t !== 'string') return; if (m.t.startsWith('online_') || m.t.startsWith('account_')) { await authority.message(c,m); return; } if (m.t.startsWith('world_')) { try { await farm.message(c, m); } catch (e) { send(c, { t: 'world_error', error: 'server_error' }); } return; } if(m.t.startsWith('interact_')||m.t==='duel_hit'||m.t==='trade_ack')return send(c,{t:'note',msg:'กรุณาใช้เทรดและ PvP จากเมนูโลกออนไลน์ ระบบนี้เปลี่ยนไปคำนวณบนเซิร์ฟเวอร์แล้ว'}); const h = H[m.t]; if (!h) return; try { await h(c, m); } catch (e) { send(c, { t: 'note', msg: 'เซิร์ฟเวอร์ผิดพลาด ลองใหม่' }); } },
     disconnect(c) { const persisted=authority.leave(c); farm.leave(c); for (const room of [...c.rooms.keys()]) leaveRoom(c, room); clients.delete(c); if (c.pid && online.get(c.pid) === c) { online.delete(c.pid); getP(c.pid).then(r => { if (r) { r.last = Date.now(); putP(r); for (const f of r.friends) pushFriends(f); if (r.guild) getG(r.guild).then(g => g && pushGuild(g)); } }); } return persisted; },
     tickFast() { authority.tick().catch(e=>console.error('Authority tick:',e.message)); farm.tick(); const budgetNow=Date.now(), refill=Math.min(1,Math.max(0,(budgetNow-budgetTime)/1000))*40;budgetTime=budgetNow;for (const c of clients) c.budget = Math.min(80,c.budget+refill);
@@ -264,6 +264,6 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
       const peers = []; for (const s in by) { by[s].sort((a, b) => (b.lp.lv || 0) - (a.lp.lv || 0)); for (const c of by[s].slice(0, lobbyPer)) peers.push({ peer: c.id, presence: { ...c.lp, pid: c.pid || '' } }); }
       const msg = JSON.stringify({ t: 'lobby', peers, counts }); for (const c of clients) send(c, msg); },
     flush() { return authority.flush(); },
-    stats() { return { clients: clients.size, players: online.size, channels: channels.size, authority: authority.stats() }; }
+    stats() { return { release, clients: clients.size, players: online.size, channels: channels.size, authority: authority.stats() }; }
   };
 }

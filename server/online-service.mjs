@@ -111,7 +111,7 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
       if(current?.record.id!==record.id||current?.world!==world){await leave(c);for(const[other,s]of sessions)if(s.record.id===record.id){await leave(other);send(other,{t:'kicked',why:'character_in_use'});}if(c.gmPID!==c.pid)record.gmFlags={};world.sim.enter(record,guild);sessions.set(c,{record,world,server,geometryEpoch:world.sim.epoch});}
       const s=sessions.get(c);c.onlineRoom=key;
       await flush(true);
-      send(c,{t:'online_ready',request:m.request,character:record.character,playerId:record.id,room:key,channel:world.channel||1,gm:c.gmPID===c.pid,mode:desc,geometry:world.sim.geometry(),state:world.sim.snapshot(),self:world.sim.self(record.id)});characterMessage(c,record);
+      send(c,{t:'online_ready',request:m.request,character:record.character,playerId:record.id,room:key,channel:world.channel||1,gm:c.gmPID===c.pid,mode:desc,rules:world.sim.G.W.gm.skillOverrides||{},geometry:world.sim.geometry(),state:world.sim.snapshot(),self:world.sim.self(record.id)});characterMessage(c,record);
       return;
     }
     const s=sessions.get(c);if(!s||s.record.account!==c.pid)throw new Error('character_not_active');
@@ -188,6 +188,7 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
       lastSimulationMs=performance.now()-simStart;
       if(t-broadcastAt>=100){broadcastAt=t;const samples=new Map();
       for(const[c,s]of sessions){if(c.pid!==s.record.account){await leave(c);continue;}const w=s.world;
+        const ruleVersion=w.sim.G.W.gm.rulesVersion||0;if(s.rulesVersion!==ruleVersion){s.rulesVersion=ruleVersion;send(c,{t:'online_rules',room:w.key,rules:w.sim.G.W.gm.skillOverrides||{}});}
         if(s.geometryEpoch!==w.sim.epoch){s.geometryEpoch=w.sim.epoch;send(c,{t:'online_geometry',room:w.key,geometry:w.sim.geometry()});}
         if(!samples.has(w)){
           const full=w.sim.snapshot(),encoded=new Map(),updates=[],removed=[];

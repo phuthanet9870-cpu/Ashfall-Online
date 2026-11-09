@@ -46,6 +46,7 @@ export function executeGM(world,record,command,input={}) {
    }break;
   }
   case 'kit':case 'kit2':case 'allmax':{
+   if(s.inv.length+new Set(Object.values(s.eq).filter(Boolean).map(it=>it.uid)).size>S.invMax)throw new Error('inventory_full');
    if(command==='allmax'){S.setLevel(D.MAX_LV);currency('gold',1e8);currency('diamond',1e5);}
    S.gmBestKit(command==='kit2'?12:8);
    break;
@@ -67,7 +68,7 @@ export function executeGM(world,record,command,input={}) {
   case 'mfreeze':W.gm.freeze=!W.gm.freeze;break;
   case 'mheal':for(const u of mobs())u.hp=u.maxhp;break;
   case 'mpull':for(const u of mobs()){const point=S.freePt(W.map,p.x+U.rf(-3,3),p.y+U.rf(-3,3));u.x=point.x;u.y=point.y;}break;
-  case 'mclear':W.units=W.units.filter(u=>u.kind!=='mob');break;
+  case 'mclear':for(const u of mobs())u.dead=true;W.units=W.units.filter(u=>u.kind!=='mob');break;
   case 'mkill':case 'dgclear':for(const u of mobs())if(E.isEnemy(p,u)){u.hp=0;E.kill(u,p);}break;
   case 'killall':for(const u of [...W.units])if(!u.dead&&u.kind!=='npc'&&E.isEnemy(p,u)){u.hp=0;E.kill(u,p);}break;
   case 'rates':W.gm.speed=n('gmspeed',.1,3,1);W.gm.time=n('gmtime',.1,10,1);W.gm.drop=n('gmdrop',0,100,1);W.gm.xp=n('gmxp',0,100,1);break;
@@ -78,8 +79,8 @@ export function executeGM(world,record,command,input={}) {
   case 'pvpwin':case 'pvplose':{const winner=command==='pvpwin'?p.team:1-p.team;if(W.mode.kind==='pvp')W.mode.finish(winner);else if(W.mode.kind==='siege')W.mode.endWar(winner);else throw new Error('match_required');break;}
   case 'score':if(W.mode.score)W.mode.score[p.team]+=10;else throw new Error('match_required');break;
   case 'prep':if(W.mode.kind!=='siege')throw new Error('siege_required');W.mode.prepT=0;break;
-  case 'skset':case 'skreset':{const cls=D.CLS[P.gc],slot=Math.floor(number(P.gs,0,D.NSK-2,0));if(!cls)throw new Error('invalid_class');const skill=cls.skills[slot];if(command==='skreset')Object.assign(skill,structuredClone(skill.base));else{for(const key of ['p','c','r','R','n','d','v'])skill[key]=n('gs'+key,0,key==='p'?1000:100,skill[key]||0);skill.n=Math.max(1,Math.floor(skill.n));skill.cc={};for(const token of String(v.gscc||'').slice(0,100).split(/\s+/)){const match=token.match(/^([a-z]+)([\d.]+)$/);if(match&&D.CC_TH[match[1]])skill.cc[match[1]]=number(match[2],0,60);}skill.dmg=!!D.ARCH[skill.arch].dmg&&skill.p>0;}W.gm.skillOverrides ||= {};W.gm.skillOverrides[P.gc+':'+slot]=structuredClone(skill);break;}
+  case 'skset':case 'skreset':{const cls=D.CLS[P.gc],slot=Math.floor(number(P.gs,0,D.NSK-2,0));if(!cls)throw new Error('invalid_class');const skill=cls.skills[slot];if(command==='skreset')Object.assign(skill,structuredClone(skill.base));else{for(const key of ['p','c','r','R','n','d','v'])skill[key]=n('gs'+key,0,key==='p'?1000:100,skill[key]||0);skill.n=Math.max(1,Math.floor(skill.n));skill.cc={};for(const token of String(v.gscc||'').slice(0,100).split(/\s+/)){const match=token.match(/^([a-z]+)([\d.]+)$/);if(match&&D.CC_TH[match[1]])skill.cc[match[1]]=number(match[2],0,60);}skill.dmg=!!D.ARCH[skill.arch].dmg&&skill.p>0;}W.gm.skillOverrides ||= {};W.gm.skillOverrides[P.gc+':'+slot]=structuredClone(skill);W.gm.rulesVersion=(W.gm.rulesVersion||0)+1;break;}
   default:throw new Error('unsupported_server_gm_command');
  }
- world.sync(record.id);return {ok:true,msg:'GM: บันทึกคำสั่งบนเซิร์ฟเวอร์แล้ว',gm:W.gm,flags};
+ world.sync(record.id);return {ok:true,msg:'GM: บันทึกคำสั่งบนเซิร์ฟเวอร์แล้ว',gm:Object.fromEntries(Object.entries(W.gm).filter(([,value])=>typeof value==='boolean'||typeof value==='number')),flags};
 }
