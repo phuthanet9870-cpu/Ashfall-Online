@@ -1,0 +1,17 @@
+name: Build itch.io zip
+on:
+  push:
+    branches: [main]
+    paths: ['public/**', '.github/workflows/build-itch.yml']
+  workflow_dispatch:
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip the game (index.html at the root of the zip)
+        run: cd public && zip -qr ../ashfall-itch.zip . && cd .. && ls -lh ashfall-itch.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ashfall-itch
+          path: ashfall-itch.zip

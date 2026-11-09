@@ -1,0 +1,14 @@
+name = "ashfall-online"
+main = "worker/index.mjs"
+compatibility_date = "2025-01-01"
+
+[vars]
+ROOM_CAP = "60"
+
+[[durable_objects.bindings]]
+name = "WORLD"
+class_name = "World"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["World"]
