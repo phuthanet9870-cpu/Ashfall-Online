@@ -50,7 +50,7 @@ export function createOnlineService({storage,send,now=Date.now,allowLegacyImport
   }
   async function handle(c,m){
     if(m.t.startsWith('account_')){
-      if(m.t==='account_logout'){await leave(c);if(c.sessionKey)await chars.docs.commit([['login-session:'+c.sessionKey,null]]);identityChanged(c,c.pid,null);c.pid=null;c.accountName=null;c.gmPID=null;send(c,{t:'account_logged_out'});return;}
+      if(m.t==='account_logout'){await leave(c);if(c.sessionKey)await chars.docs.commit([['login-session:'+c.sessionKey,null]]);identityChanged(c,c.pid,null);c.pid=null;c.accountName=null;c.gmPID=null;send(c,{t:'account_logged_out',request:m.request});return;}
       let account,token;
       if(m.t==='account_resume'){
         if(typeof m.token!=='string'||m.token.length!==64)throw new Error('invalid_session');

@@ -28,3 +28,8 @@ test('guest authentication finishes before a simultaneous account registration b
  assert.equal(c.pid,pid);assert.equal(messages.find(m=>m.t==='account_ok').pid,pid);
  await core.message(c,JSON.stringify({t:'auth',pid,key:'legacy-key-12345678901234567890'}));assert.equal(c.pid,pid);assert.equal(messages.at(-1).why,'account_login_required');
 });
+test('choosing guest after a revoked session logs out and authenticates before entering the game',async()=>{
+ const f=fixture({ashfall_session:'a'.repeat(64)});f.socket.receive({t:'kicked'});const guest=f.net.enterGuest();const logout=f.socket.sent.at(-1);assert.equal(logout.t,'account_logout');
+ f.socket.receive({t:'account_logged_out',request:logout.request});await Promise.resolve();await Promise.resolve();assert.equal(f.socket.sent.at(-1).t,'auth');assert.equal(f.net.signedOut,false);assert.equal(f.net.authed,false);
+ f.socket.receive({t:'me'});await guest;assert.equal(f.net.authed,true);
+});

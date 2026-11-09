@@ -18,6 +18,11 @@
   let ws = null, myId = null, retry = 1000, authStr = '';
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
   const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut || NET.authPending) return; if (NET.sessionToken) { if (NET.authed && !force) return; NET.authPending=true;send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; NET.authPending=true;send(a); };
+  NET.enterGuest=async()=>{
+    if(NET.sessionToken||NET.signedOut)await NET.request({t:'account_logout'});
+    if(NET.authed)return;
+    await new Promise((resolve,reject)=>{let finished=false;const timer=setTimeout(()=>{finished=true;reject(new Error('auth_timeout'));},20000);NET.on('me',()=>{if(finished)return;finished=true;clearTimeout(timer);resolve();});authStr='';auth(true);});
+  };
   setInterval(() => auth(false), 2000);
   const makeRoom = () => {
     let connected = false, lastLobby = null, lobbyStr = '', lobbyT = 0;
@@ -30,7 +35,7 @@
       ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (er) { return; }
         if (m.request && requests.has(m.request)) { const p=requests.get(m.request);clearTimeout(p.timer);requests.delete(m.request);if(m.t==='online_error')p.reject(new Error(m.error));else p.resolve(m); }
         if (m.t === 'account_ok') { NET.authPending=false; PID = NET.pid = m.pid; NET.sessionToken=m.token;ls('ashfall_session',m.token);NET.authed=true;NET.signedOut=false; }
-        if (m.t === 'account_logged_out') { NET.sessionToken='';ls('ashfall_session','');PID=NET.pid=guestPID=rnd(8);KEY=rnd(16);ls('ashfall_pid',PID);ls('ashfall_key',KEY);NET.authed=false;NET.signedOut=false; }
+        if (m.t === 'account_logged_out') { NET.sessionToken='';ls('ashfall_session','');PID=NET.pid=guestPID=rnd(8);KEY=rnd(16);ls('ashfall_pid',PID);ls('ashfall_key',KEY);NET.authPending=false;NET.authed=false;NET.signedOut=false;authStr=''; }
         if (m.t === 'kicked') { NET.authPending=false;NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');emit('login_required',m); }
         if(m.t==='online_error'&&['session_expired','invalid_session'].includes(m.error)){NET.authPending=false;NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');emit('login_required',m);}
         if (m.t === 'hi') { myId = m.id; NET.features = m.features || {}; return; }
