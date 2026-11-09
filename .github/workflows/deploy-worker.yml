@@ -32,3 +32,5 @@ jobs:
           ASHFALL_EXPECTED_RELEASE: ${{ github.sha }}
           ASHFALL_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
         run: node tests/deployment-smoke.mjs
+      - name: Verify real guest authentication and shared world entry
+        run: node .github/scripts/check-entry.mjs

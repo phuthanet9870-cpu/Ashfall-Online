@@ -15,13 +15,13 @@
   const requests = new Map();
   const bus = new Map(); const emit = (t, m) => { for (const f of bus.get(t) || []) { try { f(m); } catch (e) { } } };
   const NET = window.ASHFALL_NET = { pid: PID, sessionToken: ls('ashfall_session') || '', connected: false, authed: false, error: '', url: URL_, peerPid: new Map(), on(t, f) { (bus.get(t) || bus.set(t, []).get(t)).push(f); }, send(o) { send(o); }, request(o) { return new Promise((resolve,reject)=>{const request=crypto.randomUUID();const timer=setTimeout(()=>{requests.delete(request);reject(new Error('request_timeout'));},20000);requests.set(request,{resolve,reject,timer});send({...o,request});}); } };
-  let ws = null, myId = null, retry = 1000, authStr = '';
+  let ws = null, myId = null, retry = 1000, authStr = '', authSentAt=0;
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
-  const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut || NET.authPending) return; if (NET.sessionToken) { if (NET.authed && !force) return; NET.authPending=true;send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; NET.authPending=true;send(a); };
+  const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut) return;if(NET.authPending){if(Date.now()-authSentAt<5000)return;NET.authPending=false;authStr='';} if (NET.sessionToken) { if (NET.authed && !force) return; NET.authPending=true;authSentAt=Date.now();send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; NET.authPending=true;authSentAt=Date.now();send(a); };
   NET.enterGuest=async()=>{
     if(NET.sessionToken||NET.signedOut)await NET.request({t:'account_logout'});
     if(NET.authed)return;
-    await new Promise((resolve,reject)=>{let finished=false;const timer=setTimeout(()=>{finished=true;reject(new Error('auth_timeout'));},20000);NET.on('me',()=>{if(finished)return;finished=true;clearTimeout(timer);resolve();});authStr='';auth(true);});
+    await new Promise((resolve,reject)=>{let finished=false;const timer=setTimeout(()=>{finished=true;NET.authPending=false;authStr='';reject(new Error(NET.error||'auth_timeout'));},20000);NET.on('me',()=>{if(finished)return;finished=true;clearTimeout(timer);resolve();});authStr='';auth(true);});
   };
   setInterval(() => auth(false), 2000);
   const makeRoom = () => {

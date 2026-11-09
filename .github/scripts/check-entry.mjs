@@ -2,6 +2,7 @@ import {GameClient} from '../../tests/transport.mjs';
 import {createHeadless} from '../../server/headless.mjs';
 const endpoint='wss://ashfall-online.phuthanet9870.workers.dev/ws',clients=[];
 try{
+ const health=await (await fetch('https://ashfall-online.phuthanet9870.workers.dev/health')).json();console.log('::notice title=Authority health::'+JSON.stringify(health.authority));
  for(let i=0;i<2;i++){
   const c=await new GameClient(endpoint).connect();clients.push(c);console.log('::notice::WebSocket release '+c.messages.find(m=>m.t==='hi').features.release);
   c.send({t:'auth',pid:c.pid,key:c.key,name:'Entry probe '+i,cls:'guardian',lv:1});const auth=await c.wait(m=>['me','auth_fail','note'].includes(m.t));if(auth.t!=='me')throw new Error('Authentication rejected: '+JSON.stringify(auth));console.log('::notice::PASS production guest authentication '+i);

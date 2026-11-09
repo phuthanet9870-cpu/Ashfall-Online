@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 function fixture(initial={}){
- const data=new Map(Object.entries(initial)),sockets=[],timers=[];
+ const data=new Map(Object.entries(initial)),sockets=[],timers=[],timeouts=[];let now=100000;
  class Socket{constructor(){this.readyState=1;this.sent=[];sockets.push(this);}send(s){this.sent.push(JSON.parse(s));}receive(m){this.onmessage({data:JSON.stringify(m)});}}
- const context={console,crypto,location:{protocol:'https:',host:'game.test'},WebSocket:Socket,setInterval:f=>timers.push(f),setTimeout:()=>1,clearTimeout(){},TextDecoder,ASHFALL_STORAGE:{getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)},G:{S:{save:{name:'Legacy',cls:'ranger',lvl:9}}}};
- context.window=context;vm.runInNewContext(readFileSync('public/js/netshim.js','utf8'),context);context.claude.use('room');const socket=sockets[0];socket.onopen();return{net:context.ASHFALL_NET,socket,data,timers};
+ const context={console,crypto,location:{protocol:'https:',host:'game.test'},WebSocket:Socket,setInterval:f=>timers.push(f),Date:class extends Date{static now(){return now;}},setTimeout:f=>{timeouts.push(f);return timeouts.length;},clearTimeout(){},TextDecoder,ASHFALL_STORAGE:{getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)},G:{S:{save:{name:'Legacy',cls:'ranger',lvl:9}}}};
+ context.window=context;vm.runInNewContext(readFileSync('public/js/netshim.js','utf8'),context);context.claude.use('room');const socket=sockets[0];socket.onopen();return{net:context.ASHFALL_NET,socket,data,timers,timeouts,advance:ms=>now+=ms};
 }
 test('auth_required reauthenticates instead of leaving a green frozen client',()=>{
  const f=fixture();f.socket.receive({t:'me'});assert.equal(f.net.authed,true);let lost=0;f.net.on('auth_lost',()=>lost++);
@@ -32,4 +32,11 @@ test('choosing guest after a revoked session logs out and authenticates before e
  const f=fixture({ashfall_session:'a'.repeat(64)});f.socket.receive({t:'kicked'});const guest=f.net.enterGuest();const logout=f.socket.sent.at(-1);assert.equal(logout.t,'account_logout');
  f.socket.receive({t:'account_logged_out',request:logout.request});await Promise.resolve();await Promise.resolve();assert.equal(f.socket.sent.at(-1).t,'auth');assert.equal(f.net.signedOut,false);assert.equal(f.net.authed,false);
  f.socket.receive({t:'me'});await guest;assert.equal(f.net.authed,true);
+});
+
+test('lost initial authentication reply retries instead of keeping authPending forever',async()=>{
+ const f=fixture();assert.equal(f.socket.sent.filter(m=>m.t==='auth').length,1);f.advance(6000);for(const tick of f.timers)tick();assert.equal(f.socket.sent.filter(m=>m.t==='auth').length,2);f.socket.receive({t:'me'});await f.net.enterGuest();assert.equal(f.net.authed,true);
+});
+test('guest auth timeout allows the next click to send a fresh authentication request',async()=>{
+ const f=fixture(),failed=assert.rejects(f.net.enterGuest(),/auth_timeout/);f.timeouts.at(-1)();await failed;assert.equal(f.net.authPending,false);const next=f.net.enterGuest();assert.equal(f.socket.sent.filter(m=>m.t==='auth').length,2);f.socket.receive({t:'me'});await next;assert.equal(f.net.authed,true);
 });
