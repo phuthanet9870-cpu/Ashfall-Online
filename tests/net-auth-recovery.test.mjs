@@ -18,3 +18,13 @@ test('account-locked legacy guest identity is replaced without changing legacy s
 test('session resume is sent once while pending and expiry requests login',()=>{
  const f=fixture({ashfall_session:'a'.repeat(64)});for(const tick of f.timers)tick();assert.equal(f.socket.sent.filter(m=>m.t==='account_resume').length,1);let login=0;f.net.on('login_required',()=>login++);f.socket.receive({t:'online_error',error:'session_expired'});assert.equal(login,1);assert.equal(f.net.authed,false);assert.equal(f.net.signedOut,true);assert.equal(f.data.get('ashfall_session'),'');
 });
+test('guest authentication finishes before a simultaneous account registration binds its identity',async()=>{
+ const {createCore}=await import('../server/core.mjs');const values=new Map(),messages=[];let release,entered;
+ const waiting=new Promise(r=>release=r),started=new Promise(r=>entered=r);const pid='0123456789abcdef';let blocked=true;
+ const storage={async get(k){if(k==='account-locked:'+pid&&blocked){blocked=false;entered();await waiting;}return values.get(k)||null;},async put(k,v){values.set(k,v);},async transaction(fn){return fn({get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v)});}};
+ const core=createCore({storage,hash:async x=>x}),c=core.connect({send:s=>messages.push(JSON.parse(s)),close(){}});
+ const auth=core.message(c,JSON.stringify({t:'auth',pid,key:'legacy-key-12345678901234567890',name:'Legacy',cls:'ranger',lv:9}));await started;
+ const registration=core.message(c,JSON.stringify({t:'account_register',username:'race-account',password:'password123'}));release();await Promise.all([auth,registration]);
+ assert.equal(c.pid,pid);assert.equal(messages.find(m=>m.t==='account_ok').pid,pid);
+ await core.message(c,JSON.stringify({t:'auth',pid,key:'legacy-key-12345678901234567890'}));assert.equal(c.pid,pid);assert.equal(messages.at(-1).why,'account_login_required');
+});

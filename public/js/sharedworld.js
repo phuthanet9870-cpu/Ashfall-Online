@@ -77,8 +77,8 @@
     if(G.TICK_FIELDS)G.TICK_FIELDS.splice(0,G.TICK_FIELDS.length,...(state.clockFields||[]).map(f=>({...f,u:entities.get(f.owner)})).filter(f=>f.u));
     SW._ultimateIds ||= new Set();for(const st of state.ultimates||[]){const id=st.owner+':'+Math.round(state.time-st.t);if(SW._ultimateIds.has(id))continue;SW._ultimateIds.add(id);const u=entities.get(st.owner);if(u){const active={...st,u,done:false};V.fx.push({k:'f6su',t:st.t,dur:st.dur,st:active,look:st.look,sh:st.sh,pal:D.ELEM[D.CLS[u.cls].elem].pal,x:st.x,y:st.y,ground:st.look==='zone'||st.look==='aura'});}}
     SW._effects ||= new Set();
-    const resolve=v=>{if(!v||typeof v!=='object')return v;if(v.$unit!==undefined)return entities.get(v.$unit);if(Array.isArray(v))return v.map(resolve);const o={};for(const[k,x]of Object.entries(v))o[k]=resolve(x);return o;};
-    for(const effect of state.effects||[]){if(SW._effects.has(effect.id))continue;SW._effects.add(effect.id);const oldRandom=Math.random;Math.random=U.seeded(effect.seed);try{const target=effect.kind==='fx'?G.FX:V;target[effect.method]?.(...resolve(effect.args));}catch(e){console.error('Online effect',effect.method,e.message);}finally{Math.random=oldRandom;}}
+    let missingEffectUnit=false;const resolve=v=>{if(!v||typeof v!=='object')return v;if(v.$unit!==undefined){const unit=entities.get(v.$unit);if(!unit)missingEffectUnit=true;return unit;}if(Array.isArray(v))return v.map(resolve);const o={};for(const[k,x]of Object.entries(v))o[k]=resolve(x);return o;};
+    for(const effect of state.effects||[]){if(SW._effects.has(effect.id))continue;SW._effects.add(effect.id);missingEffectUnit=false;const args=resolve(effect.args);if(missingEffectUnit)continue;const oldRandom=Math.random;Math.random=U.seeded(effect.seed);try{const target=effect.kind==='fx'?G.FX:V;target[effect.method]?.(...args);}catch(e){console.error('Online effect',effect.method,e.message);}finally{Math.random=oldRandom;}}
     if(SW._effects.size>2000)SW._effects=new Set((state.effects||[]).map(e=>e.id));
   }
   NET.on('online_character',m=>{if(m.character!==currentCharacter||!S.save)return;
