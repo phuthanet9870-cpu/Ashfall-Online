@@ -18,15 +18,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - uses: cloudflare/wrangler-action@v3
-        id: deploy
+      - name: Stamp Worker build identity
         env:
           RELEASE_SHA: ${{ github.sha }}
+        run: node scripts/stamp-release.mjs
+      - uses: cloudflare/wrangler-action@v3
+        id: deploy
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          vars: |
-            RELEASE_SHA
       - name: Verify deployed online authority
         env:
           ASHFALL_EXPECTED_RELEASE: ${{ github.sha }}
