@@ -2,7 +2,7 @@
 
 เกม MMO 2D พิกเซลบนเบราว์เซอร์ ใช้ Node.js หรือ Cloudflare Worker + Durable Object เป็นผู้คำนวณเกมกลาง และเสิร์ฟหน้าเว็บผ่าน Node, itch.io หรือ GitHub Pages
 
-ติดตั้ง Worker ที่ `ashfall-online.phuthanet9870.workers.dev` แล้วเมื่อ 9 พฤศจิกายน 2026 และผ่าน [การตรวจ production HTTPS/WebSocket](https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42617735799) ว่าใช้ `onlineAuthority=2` การตรวจนี้ไม่แทนการทดสอบโหลดระยะยาวบน production
+ติดตั้ง Worker ที่ `ashfall-online.phuthanet9870.workers.dev` แล้ว และเมื่อ 10 พฤศจิกายน 2026 ผ่าน [การตรวจ production HTTPS/WebSocket และเข้าโลกจริง](https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42735546647) ว่าใช้ `onlineAuthority=2` การตรวจนี้ไม่แทนการทดสอบโหลดระยะยาวบน production
 
 ## ระบบออนไลน์
 
@@ -144,3 +144,5 @@ HUD ของ PvP/กิลด์วอร์และหน้าต่าง�
 เมื่อ 9 พฤศจิกายน 2026 การทดสอบบน production พบ `Exceeded allowed rows written in Durable Objects free tier.` จึงเพิ่มการตรวจ guest auth, เข้าโลกสองผู้เล่น, การเดินที่อีกฝั่งเห็น และการซื้อของส่วนตัวในทุก deployment หลังตรวจ HTTPS/WebSocket
 
 ระบบข้ามเอกสารที่ไม่เปลี่ยน ใช้ chunk ขนาดใหญ่ขึ้นภายในขีดจำกัด 128 KiB บันทึก snapshot โลกทุก 60 วินาที และไม่เขียนโลกอื่นเมื่อทำธุรกรรมในโลกเดียว กระเป๋า/การเก็บของ/เทรดยัง commit ทันทีเป็น transaction เมื่อฐานข้อมูลปฏิเสธจะถอยช่วง retry สูงสุด 60 วินาที แผน Free ยังมีเพดานรายวันซึ่ง [Cloudflare รีเซ็ตเวลา 00:00 UTC หรือ 07:00 น. ไทย](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+
+[ผลทดสอบบัญชีบน production](https://github.com/phuthanet9870-cpu/Ashfall-Online/actions/runs/42735843219): สมัครสองบัญชี เข้าโลกเดียวกัน เดินให้ทั้งสองฝั่งเห็น ซื้อของส่วนตัว และล็อกอินใหม่บนอีก connection เพื่อยืนยันกระเป๋าถาวร
