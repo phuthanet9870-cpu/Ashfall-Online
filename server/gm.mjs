@@ -16,7 +16,7 @@ export function executeGM(world,record,command,input={}) {
   case 'gmcls':setClass(d.cls);break;
   case 'cur':currency(d.k,n('gmamt',-1e9,1e9,0));break;
   case 'dia':currency('diamond',1000);break;
-  case 'tix':s.gacha.tix=number((s.gacha.tix||0)+100,0,1e9);break;
+  case 'tix':s.gacha ||= {pity:{},tix:0};s.gacha.tix=number((s.gacha.tix||0)+100,0,1e9);break;
   case 'reroll':s.bag.reroll=(s.bag.reroll||0)+50;break;
   case 'stones':s.bag.stones=s.bag.stones.map(q=>q+50);break;
   case 'cons':for(const key of ['hpPot','mpPot','ret','foodXp','foodDrop','protect','reforge'])s.bag[key]=(s.bag[key]||0)+50;break;
@@ -44,6 +44,21 @@ export function executeGM(world,record,command,input={}) {
     else if(cat==='fashion'){if(!D.FASHION_SLOTS.some(x=>x.k===key))throw new Error('invalid_slot');item=S.genItem('fashion',10,1,{slot:key,theme:number(P.gth,0,D.FASHION_THEMES.length-1,0)});}
     else throw new Error('invalid_catalogue');add(item);
    }break;
+  }
+  case 'gmcs-give':case 'gmcs-full':case 'gmcs-wear':case 'gmcs-all':case 'gmcs-tix':case 'gmcs-pets':{
+   if(command==='gmcs-tix'){s.gacha ||= {pity:{},tix:0};s.gacha.tix=(s.gacha.tix||0)+50;break;}
+   if(command==='gmcs-pets'){s.pets=D.PETS.map(p=>p.k);break;}
+   const cls=P.gcs||s.cls,pieces=['weapon','head','chest','gloves','legs','boots'],t=Math.floor(number(P.gt,1,10,10)),level=Math.max(60,Math.round(s.lvl/2));
+   if(!D.CLS[cls])throw new Error('invalid_class');
+   if(command==='gmcs-give'){if(!pieces.includes(d.v))throw new Error('invalid_slot');add(S.genClassItem(cls,d.v,t,level));break;}
+   if(command==='gmcs-wear'&&s.cls!==cls)setClass(cls);
+   for(const id of command==='gmcs-all'?D.CLASSES.map(c=>c.id):[cls])for(const piece of pieces)add(S.genClassItem(id,piece,t,level));
+   if(command==='gmcs-wear')S.wearSet('cs_'+cls);
+   break;
+  }
+  case 'gmwb-give':case 'gmwb-all':{
+   const t=Math.floor(number(P.gt,1,10,10)),entries=command==='gmwb-all'?D.WB_ITEMS:D.WB_ITEMS.filter(it=>it.boss===d.b&&it.piece===d.p);
+   if(!entries.length)throw new Error('invalid_boss_item');for(const entry of entries)add(S.genWBItem(entry.boss,entry.piece,t));break;
   }
   case 'kit':case 'kit2':case 'allmax':{
    if(s.inv.length+new Set(Object.values(s.eq).filter(Boolean).map(it=>it.uid)).size>S.invMax)throw new Error('inventory_full');

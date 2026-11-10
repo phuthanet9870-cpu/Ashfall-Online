@@ -33,4 +33,6 @@ jobs:
           ASHFALL_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
         run: node tests/deployment-smoke.mjs
       - name: Verify real guest authentication and shared world entry
+        env:
+          ASHFALL_VERIFY_GM_ADDONS: '1'
         run: node .github/scripts/check-entry.mjs

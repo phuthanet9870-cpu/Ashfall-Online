@@ -207,3 +207,15 @@ test('original dungeon result window receives its server reward model and only t
  w.G.W.mode.endRun('exit');
  for(const[c,uid,foreign]of[[a,'result-loot-a','result-loot-b'],[b,'result-loot-b','result-loot-a']]){const message=f.out.get(c).filter(m=>m.t==='online_event'&&m.event.t==='dungeon_result').at(-1);assert.equal(message.room,sa.world.key);const result=message.event;assert.equal(result.result.F,1);assert.ok(Array.isArray(result.result.dist));assert.ok(Array.isArray(result.result.items));assert.deepEqual(result.run.got.map(it=>it.uid),[uid]);assert.ok(!JSON.stringify(result).includes(foreign));assert.equal(result.run.got[0]._collector,undefined);}
 });
+
+test('original GM class-set and world-boss buttons grant durable private items through authority',async()=>{
+ const f=fixture(),a=f.client('addon-gm'),b=f.client('addon-viewer');await f.enter(a);await f.enter(b);const s=f.service.sessions.get(a),other=f.service.sessions.get(b),D=s.world.sim.G.D;
+ const run=async(command,input={},id=crypto.randomUUID())=>{await f.send(a,{t:'online_gm',id,command,input});assert.equal(f.last(a,'online_error')?.id===id?f.last(a,'online_error').error:f.last(a,'online_gm_result')?.result.ok,true,command);};
+ await f.send(a,{t:'online_gm',id:'denied-addon',command:'gmcs-full',input:{panel:{gcs:'chronomancer',gt:10}}});assert.equal(f.last(a,'online_error').error,'gm_required');await f.send(a,{t:'online_gm_unlock',code:'gmadmin2008'});
+ await run('gmcs-full',{panel:{gcs:'chronomancer',gt:10}},'full-once');assert.equal(s.record.save.inv.filter(it=>it.cset==='chronomancer').length,6);await run('gmcs-full',{panel:{gcs:'chronomancer',gt:10}},'full-once');assert.equal(s.record.save.inv.length,6);
+ await run('gmcs-wear',{panel:{gcs:'chronomancer',gt:10}});assert.equal(s.record.save.cls,'chronomancer');assert.equal(Object.values(s.record.save.eq).filter(it=>it?.cset==='chronomancer').length,6);
+ const tickets=s.record.save.gacha?.tix||0;await run('gmcs-tix');assert.equal(s.record.save.gacha.tix,tickets+50);await run('gmcs-pets');assert.deepEqual(s.record.save.pets,D.PETS.map(p=>p.k));
+ await run('clearinv');await run('gmcs-all',{panel:{gt:10}});assert.equal(s.record.save.inv.length,D.CLASSES.length*6);assert.equal(new Set(s.record.save.inv.map(it=>it.cset)).size,D.CLASSES.length);
+ await run('clearinv');await run('gmwb-give',{dataset:{b:D.WB_ITEMS[0].boss,p:D.WB_ITEMS[0].piece},panel:{gt:9}});assert.equal(s.record.save.inv[0].wb,D.WB_ITEMS[0].boss);await run('gmwb-all',{panel:{gt:10}});assert.equal(s.record.save.inv.length,D.WB_ITEMS.length+1);assert.equal(other.record.save.inv.length,0);
+ const saved=await f.service.characters.docs.read(f.service.characters.key(s.record.id));assert.equal(saved.save.cls,'chronomancer');assert.equal(saved.save.inv.length,D.WB_ITEMS.length+1);
+});

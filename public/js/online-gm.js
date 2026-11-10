@@ -4,7 +4,7 @@
  const unlock=G.GMX.unlock,lock=G.GMX.lock,gmCmd=UI.gmCmd,act=UI.act;let queue=Promise.resolve();
  G.GMX.unlock=()=>{if(!SW.active)return unlock();return NET.request({t:'online_gm_unlock',code:'gmadmin2008'}).then(()=>{SW.gm=true;unlock();UI.toast('เปิด GM บนเซิร์ฟเวอร์แล้ว','good');}).catch(e=>UI.toast(e.message,'bad'));};
  NET.on('online_ready',m=>{SW.gm=!!m.gm;if(!SW.gm)lock();});NET.on('close',()=>{SW.gm=false;lock();});
- const capture=()=>{const values={};for(const el of document.querySelectorAll('input[id],select[id],textarea[id]'))if(/^(gm|gs|wb)/.test(el.id))values[el.id]=el.type==='checkbox'?el.checked:el.value;const P=UI.panel||{},panel={};for(const k of ['gt','gn','gilv','gcat','gset','gth','gc','gs'])if(P[k]!==undefined)panel[k]=P[k];return {values,panel,point:S.IN.lastClickW};};
+ const capture=()=>{const values={};for(const el of document.querySelectorAll('input[id],select[id],textarea[id]'))if(/^(gm|gs|wb)/.test(el.id))values[el.id]=el.type==='checkbox'?el.checked:el.value;const P=UI.panel||{},panel={};for(const k of ['gt','gn','gilv','gcat','gset','gth','gc','gs','gcs'])if(P[k]!==undefined)panel[k]=P[k];return {values,panel,point:S.IN.lastClickW};};
  const send=(command,el,input={})=>{
   if(!SW.gm){UI.toast('พิมพ์ /gmadmin2008 เพื่อเปิด GM บนเซิร์ฟเวอร์ก่อน','bad');return;}
   const data={...capture(),dataset:{...el?.dataset},...input};queue=queue.catch(()=>{}).then(()=>NET.request({t:'online_gm',id:crypto.randomUUID(),command,input:data})).then(m=>{if(m.result){Object.assign(W.gm,m.result.gm,m.result.flags);UI.toast(m.result.msg,'good');if(UI.panel?.id==='gm')UI.renderPanel();}return m;}).catch(e=>UI.toast('GM: '+e.message,'bad'));return queue;
@@ -19,6 +19,8 @@
  };
  UI.act=(el,e)=>{if(!SW.active)return act(el,e);const a=el.dataset.act;
   if(a==='gm')return UI.gmCmd(el.dataset.c,el);
+  if(a==='gmcs-cls'){if(UI.panel){UI.panel.gcs=el.dataset.v;UI.renderPanel();}return;}
+  if(['gmcs-give','gmcs-full','gmcs-wear','gmcs-all','gmcs-tix','gmcs-pets','gmwb-give','gmwb-all'].includes(a))return send(a,el);
   if(a==='gmx-spawn')return send('spawnMonster',el);
   if(a==='gmx-cls')return send('gmcls',{dataset:{cls:el.dataset.v}});
   if(a==='gmx-g'||a==='gmx-m'){if(UI.panel){UI.panel[a==='gmx-g'?'mg':'mm']=el.dataset.v;UI.renderPanel();}return;}

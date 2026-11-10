@@ -104,6 +104,8 @@
     const it = S.genClassItem(s.cls, U.pick(PIECES), r.t, Math.min(100, Math.max(20, Math.round(s.lvl / 2) + r.t * 3))); S.addItem(it, true); return { r, img: UI.itemIcon(it), n: it.name, it };
   };
   S.pullGacha = pull; S.rollGachaRarity = rollR; S.GACHA_RAR = RAR;
+  const owned = (k) => { const s = S.save; const all = [...s.inv, ...Object.values(s.eq)].filter(i => i && i.set === k); const by = {}; for (const it of all) { const cur = by[it.slot]; if (!cur || it.tier > cur.tier || (it.tier === cur.tier && it.ilv > cur.ilv)) by[it.slot] = it; } return by; };
+  S.wearSet = (k) => { const s = S.save, by = owned(k); let n = 0; for (const p of PIECES) { const it = by[p]; if (!it || s.eq[p] === it) continue; const i = s.inv.indexOf(it); if (i < 0) continue; s.inv.splice(i, 1); if (s.eq[p]) s.inv.push(s.eq[p]); s.eq[p] = it; n++; } S.refreshPlayer(true); UI.buildSkillbar && UI.buildSkillbar(); return n; };
   if (G.headless) return;
   // icons: unique per class + slot
   const K = UI.ICONKIT, IC = UI.ICONS; const ic0 = UI.itemIcon;
@@ -117,7 +119,6 @@
   };
 
   // ---------- set codex (character panel tab) + equip owned pieces ----------
-  const owned = (k) => { const s = S.save; const all = [...s.inv, ...Object.values(s.eq)].filter(i => i && i.set === k); const by = {}; for (const it of all) { const cur = by[it.slot]; if (!cur || it.tier > cur.tier || (it.tier === cur.tier && it.ilv > cur.ilv)) by[it.slot] = it; } return by; };
   const setCard = (set, P) => { const s = S.save, c = D.CLS[set.cls], by = owned(set.k); const n = PIECES.filter(p => by[p]).length; const worn = PIECES.filter(p => s.eq[p] && s.eq[p].set === set.k).length; const mine = set.cls === s.cls;
     return `<div class="csc ${mine ? 'mine' : ''} ${P.cs === set.k ? 'on' : ''}" style="--ec:${D.ELEM[c.elem].pal[1]}"><button class="cshead" data-act="cs-open" data-k="${set.k}"><img src="${UI.bodyURL(c.id)}" alt=""><span><b>${esc(set.n)}</b><small>${esc(c.name)} · ${D.ROLES[c.role].th}</small></span><i>${n}/6</i></button>
       <div class="cspieces">${PIECES.map(p => { const it = by[p]; return `<span class="icell t${it ? it.tier : 1} ${it ? '' : 'miss'} ${s.eq[p] && s.eq[p].set === set.k ? 'worn' : ''}" title="${it ? esc(it.name) : 'ยังไม่มี'}"><img src="${UI.itemIcon(it || { cset: set.cls, slot: p, tier: 1 })}" alt=""></span>`; }).join('')}</div>
@@ -127,7 +128,7 @@
   const CP = UI.PANELS.char; if (!CP.tabs.find(t => t[0] === 'sets')) CP.tabs.splice(2, 0, ['sets', 'ชุดไอเทมคลาส']);
   const cr0 = CP.render; CP.render = function (tab, P) { if (tab !== 'sets') return cr0.call(this, tab, P); const s = S.save; P.cs = P.cs || 'cs_' + s.cls; const list = D.CLASS_SETS.slice().sort((a, b) => (b.cls === s.cls) - (a.cls === s.cls));
     return `<p class="muted">ชุดไอเทมเฉพาะคลาส ${D.CLASS_SETS.length} ชุด ชุดละ 6 ชิ้น (อาวุธ หมวก เสื้อ ถุงมือ กางเกง รองเท้า) · ใส่ได้เฉพาะคลาสนั้น · โบนัสเข้ากับบทบาทของอาชีพ · ครบ 6 ชิ้นได้อัลติเมตเพิ่มอีก 1 สกิล (ปุ่ม G) · คลิกชุดเพื่อดูและสวมใส่ทันที</p><div class="csgrid">${list.map(x => setCard(x, P)).join('')}</div>`; };
-  S.wearSet = (k) => { const s = S.save, by = owned(k); let n = 0; for (const p of PIECES) { const it = by[p]; if (!it || s.eq[p] === it) continue; const i = s.inv.indexOf(it); if (i < 0) continue; s.inv.splice(i, 1); if (s.eq[p]) s.inv.push(s.eq[p]); s.eq[p] = it; n++; } S.refreshPlayer(true); UI.buildSkillbar && UI.buildSkillbar(); return n; };
+
 
   // ---------- skill bar: 16th button (set ultimate) ----------
   const rsi0 = UI.refreshSkillIcons; UI.refreshSkillIcons = () => { rsi0(); const p = W.player; const el = UI.skEls && UI.skEls[D.SET_IDX]; if (!el || !p) return; const on = E.unlocked(p, D.SET_IDX); el.hidden = !on; el.classList.add('setult'); };
