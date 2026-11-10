@@ -123,7 +123,7 @@ export function createWorldRuntime(descriptor,{changed=noop,event=noop,checkpoin
   function enter(record,guild,options={}){
     if(members.has(record.id))return members.get(record.id).unit;
     if(desc.kind==='dungeon'&&desc.floor>(record.save.dungeons[desc.id]?.cp||0)+1)throw new Error('checkpoint_locked');
-    let team=desc.kind==='wbarena'?20+members.size:0;
+    let team=0;if(desc.kind==='wbarena'){team=20;while([...members.values()].some(a=>a.unit.team===team))team++;}
     if(mode.team){
       if(desc.kind==='siege'){
         if(!guild?.id)throw new Error('guild_required');
