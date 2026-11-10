@@ -81,12 +81,13 @@
   const add0 = S.addItem; let pend = 0;
   S.addItem = (it, quiet) => { const r = add0(it, quiet); const st = S.save && S.save.settings; if (st && st.autoEquip && it && (S.isEquip(it) || it.kind === 'rune' || it.kind === 'gem') && !(W.mode && W.mode.pvp && W.mode.over === false)) { clearTimeout(pend); pend = setTimeout(() => report(S.autoEquip(), true), 600); } return r; };
 
+  UI.autoEquipReport=report;
   // ---------- selling ----------
   const KINDS = [['gear', 'เกียร์'], ['acc', 'เครื่องประดับ'], ['relic', 'Relic'], ['rune', 'รูน'], ['gem', 'เจม']];
   const cfg = () => { const st = S.save.settings; st.sellT = st.sellT || [1, 2]; st.sellK = st.sellK || ['gear', 'acc']; return st; };
   const sellable = it => !it.lock && KINDS.some(k => k[0] === it.kind);
   const pickSell = () => { const st = cfg(); return S.save.inv.filter(it => sellable(it) && st.sellT.includes(it.tier) && st.sellK.includes(it.kind)); };
-  const doSell = (list) => { let g = 0; for (const it of list) g += S.sell(it); return g; };
+  const doSell = (list) => { if(G.SHARED_WORLD?.active)return G.SHARED_WORLD.sellMany(list.map(it=>it.uid));let g = 0; for (const it of list) g += S.sell(it); return g; };
   const sellBar = (tab) => { const st = cfg(), list = pickSell(), gold = list.reduce((a, it) => a + S.itemPrice(it), 0); const allN = S.save.inv.filter(sellable).length;
     return `<div class="sellbar"><div class="gmrow"><b>ขายระดับ</b>${D.TIERS.map((T, i) => `<button class="tchip t${i + 1} ${st.sellT.includes(i + 1) ? 'on' : ''}" data-act="x-sellt" data-v="${i + 1}" title="${esc(T.n)}">${i + 1}</button>`).join('')}<button class="chip" data-act="x-sellt" data-v="all">ทุกระดับ</button><button class="chip" data-act="x-sellt" data-v="none">ล้าง</button></div>
       <div class="gmrow"><b>ประเภท</b>${KINDS.map(([k, n]) => `<button class="chip ${st.sellK.includes(k) ? 'on' : ''}" data-act="x-sellk" data-v="${k}">${n}</button>`).join('')}</div>
@@ -111,11 +112,11 @@
     switch (a) {
       case 'x-sellt': { const v = el.dataset.v; if (v === 'all') st.sellT = D.TIERS.map((_, i) => i + 1); else if (v === 'none') st.sellT = []; else { const t = +v; st.sellT = st.sellT.includes(t) ? st.sellT.filter(x => x !== t) : [...st.sellT, t]; } break; }
       case 'x-sellk': { const k = el.dataset.v; st.sellK = st.sellK.includes(k) ? st.sellK.filter(x => x !== k) : [...st.sellK, k]; break; }
-      case 'x-sellsel': { const L = pickSell(); const hi = L.filter(i => i.tier >= 7).length; const go = () => { const g = doSell(L); UI.toast(`ขาย ${L.length} ชิ้น ได้ ${U.fmt(g)} ทอง`, 'good'); UI.panel && (UI.panel.sel = null); S.persist(); UI.renderPanel(); };
+      case 'x-sellsel': { const L = pickSell(); const hi = L.filter(i => i.tier >= 7).length; const go = () => { return Promise.resolve(doSell(L)).then(g=>{ UI.toast(`ขาย ${L.length} ชิ้น ได้ ${U.fmt(g)} ทอง`, 'good'); UI.panel && (UI.panel.sel = null); S.persist(); UI.renderPanel(); }).catch(e=>UI.toast(e.message,'bad')); };
         if (hi) { UI._sellGo = go; UI.modal(`<h2>ยืนยันการขาย</h2><p>จะขาย ${L.length} ชิ้น รวมของระดับ 7 ขึ้นไป <b class="bad">${hi} ชิ้น</b></p><div class="list"><button class="btn danger" data-act="x-confirm">ขายเลย</button><button class="btn" data-act="x-close">ยกเลิก</button></div>`); return; } go(); return; }
-      case 'x-sellall': { const L = S.save.inv.filter(sellable); const gold = L.reduce((x, it) => x + S.itemPrice(it), 0); UI._sellGo = () => { const g = doSell(L); UI.toast(`ขายทั้งหมด ${L.length} ชิ้น ได้ ${U.fmt(g)} ทอง`, 'good'); UI.panel && (UI.panel.sel = null); S.persist(); UI.renderPanel(); };
+      case 'x-sellall': { const L = S.save.inv.filter(sellable); const gold = L.reduce((x, it) => x + S.itemPrice(it), 0); UI._sellGo = () => { return Promise.resolve(doSell(L)).then(g=>{ UI.toast(`ขายทั้งหมด ${L.length} ชิ้น ได้ ${U.fmt(g)} ทอง`, 'good'); UI.panel && (UI.panel.sel = null); S.persist(); UI.renderPanel(); }).catch(e=>UI.toast(e.message,'bad')); };
         UI.modal(`<h2>ขายทั้งหมด?</h2><p>ขายเกียร์ เครื่องประดับ Relic รูน และเจมในกระเป๋าทั้งหมด <b>${L.length} ชิ้น</b> ได้ประมาณ <b>${U.fmt(gold)} ทอง</b></p><p class="muted">ของที่สวมอยู่และของที่ล็อกไว้จะไม่ถูกขาย</p><div class="list"><button class="btn danger" data-act="x-confirm">ขายทั้งหมด</button><button class="btn" data-act="x-autosell">ออโต้สวมใส่ก่อน แล้วค่อยขาย</button><button class="btn" data-act="x-close">ยกเลิก</button></div>`); return; }
-      case 'x-autosell': S.autoEquip(); { const L = S.save.inv.filter(sellable); const g = doSell(L); UI.toast(`สวมของที่ดีที่สุดแล้ว ขาย ${L.length} ชิ้น ได้ ${U.fmt(g)} ทอง`, 'good'); } $('#modal').hidden = true; S.persist(); UI.renderPanel(); return;
+      case 'x-autosell': (async()=>{if(G.SHARED_WORLD?.active)await G.SHARED_WORLD.command('autoEquip');else S.autoEquip();const L=S.save.inv.filter(sellable),g=await doSell(L);UI.toast(`สวมของที่ดีที่สุดแล้ว ขาย ${L.length} ชิ้น ได้ ${U.fmt(g)} ทอง`,'good');$('#modal').hidden=true;S.persist();UI.renderPanel();})().catch(e=>UI.toast(e.message,'bad'));return;
       case 'x-close': UI.closeModal(); return;
       case 'x-confirm': $('#modal').hidden = true; if (UI._sellGo) UI._sellGo(); UI._sellGo = null; return;
       case 'x-auto': { const r = S.autoEquip(); S.persist(); UI.renderPanel(); report(r); return; }

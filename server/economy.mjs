@@ -21,7 +21,7 @@ export function executeEconomy(G,record,command,args=[]) {
     case 'equip':{const it=ownedUnlocked(args[0],'inv');if(!S.isEquip(it))throw new Error('not_equipment');result=S.equip(it);break;}
     case 'unequip':if(!Object.hasOwn(s.eq,args[0]))throw new Error('empty_slot');result=S.unequip(args[0]);break;
     case 'sell':case 'salvage':result=S[command](ownedUnlocked(args[0],'inv'),false);break;
-    case 'sellMany':{if(!Array.isArray(args[0])||args[0].length>1000||new Set(args[0]).size!==args[0].length)throw new Error('invalid_items');for(const uid of args[0])S.sell(ownedUnlocked(uid,'inv'),false);result=true;break;}
+    case 'sellMany':{if(!Array.isArray(args[0])||args[0].length>1000||new Set(args[0]).size!==args[0].length)throw new Error('invalid_items');let gold=0;for(const uid of args[0])gold+=S.sell(ownedUnlocked(uid,'inv'),false)||0;result=gold;break;}
     case 'lock':{const it=item(args[0]);it.lock=!!args[1];result=true;break;}
     case 'fusion':{if(!Array.isArray(args[0])||args[0].length!==3||new Set(args[0]).size!==3)throw new Error('invalid_items');result=S.fusion(args[0].map(uid=>ownedUnlocked(uid,'inv')));break;}
     case 'socket':{const target=item(args[0]),gem=ownedUnlocked(args[1],'inv');if(gem.kind!=='gem')throw new Error('not_gem');result=S.socket(target,gem);break;}
@@ -38,13 +38,13 @@ export function executeEconomy(G,record,command,args=[]) {
     case 'marketBuy':{const market=s._onlineMarket;if(!market||market.period!==Math.floor(Date.now()/600000))throw new Error('market_expired');const index=market.items.findIndex(it=>it.uid===args[0]);if(index<0)throw new Error('listing_not_found');const listing=market.items[index],it=clone(listing);if(s.gold<listing.price)throw new Error('insufficient_gold');delete it.price;delete it.seller;if(!S.addItem(it,true))throw new Error('inventory_full');s.gold-=listing.price;market.items.splice(index,1);result=true;break;}
     case 'marketSell':result=S.sell(ownedUnlocked(args[0],'inv'),true);break;
     case 'buyStable':{const e=S.STABLE[integer(args[0],0,S.STABLE.length-1)];if(s.gold<(e.price||0)||s.honor<(e.honor||0))throw new Error('insufficient_currency');const owned=e.type==='pet'?s.pets:s.mounts;if(owned.includes(e.k))throw new Error('already_owned');s.gold-=e.price||0;s.honor-=e.honor||0;owned.push(e.k);result=true;break;}
-    case 'pet':case 'mount':{const owned=command==='pet'?s.pets:s.mounts;if(args[0]!==null&&!owned.includes(args[0]))throw new Error('not_owned');s[command]=args[0];result=true;break;}
+    case 'pet':case 'mount':{const owned=command==='pet'?s.pets:s.mounts;if(args[0]!==null&&(!owned.includes(args[0])||!(command==='pet'?D.PETS:D.MOUNTS).some(x=>x.k===args[0])))throw new Error('not_owned');s[command]=args[0];result=true;break;}
     case 'useFood':if(!['foodXp','foodDrop'].includes(args[0])||(s.bag[args[0]]||0)<1)throw new Error('not_owned');result=S.useFood(args[0]);break;
     case 'changeClass':if(!D.CLS[args[0]])throw new Error('invalid_class');result=S.changeClass(args[0]);break;
     case 'page':s.page=integer(args[0],0,s.runeBoard.length-1);result=true;break;
     case 'vaultDeposit':{const it=ownedUnlocked(args[0],'inv');s.vault ||= {cap:100,items:[]};if(s.vault.items.length>=s.vault.cap)throw new Error('vault_full');s.inv.splice(s.inv.indexOf(it),1);s.vault.items.push(it);result=true;break;}
     case 'vaultWithdraw':{s.vault ||= {cap:100,items:[]};const i=s.vault.items.findIndex(it=>it.uid===args[0]);if(i<0)throw new Error('item_not_owned');if(s.inv.length>=S.invMax)throw new Error('inventory_full');s.inv.push(s.vault.items.splice(i,1)[0]);result=true;break;}
-    case 'buyDiamond':case 'buyTicket':integer(args[0],1,1000);result=S[command](args[0]);break;
+    case 'buyDiamond':case 'buyTicket':integer(args[0],1,9999);result=S[command](args[0]);break;
     case 'gacha':{
       const kind=args[0],n=integer(args[1],1,10);s.gacha ||= {tix:0,pity:{}};if((s.gacha.tix||0)<n)throw new Error('insufficient_tickets');if(!['pet','fashion','cset','wings','mc'].includes(kind))throw new Error('invalid_box');
       s.gacha.tix-=n;const rolls=[];
@@ -57,12 +57,21 @@ export function executeEconomy(G,record,command,args=[]) {
     }
     case 'settings':{
       const values=args[0];if(!values||typeof values!=='object')throw new Error('invalid_settings');
-      const safe=(v,depth=0)=>{if(depth>4)return undefined;if(typeof v==='boolean'||typeof v==='string'&&v.length<200||typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<1e7)return v;if(Array.isArray(v)&&v.length<=100)return v.map(x=>safe(x,depth+1)).filter(x=>x!==undefined);if(v&&typeof v==='object'){const o={};for(const[k,x]of Object.entries(v).slice(0,100))if(!/gm|god|cheat|oneHit|wbMin|wbBots|wbParty|wbForce|__proto__|constructor|prototype/i.test(k)){const value=safe(x,depth+1);if(value!==undefined)o[k]=value;}return o;}return undefined;};
+      const safe=(v,depth=0)=>{if(depth>4)return undefined;if(typeof v==='boolean'||typeof v==='string'&&v.length<200||typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<1e7)return v;if(Array.isArray(v)&&v.length<=100)return v.map(x=>safe(x,depth+1)).filter(x=>x!==undefined);if(v&&typeof v==='object'){const o={};for(const[k,x]of Object.entries(v).slice(0,100))if(!/gm|god|cheat|oneHit|botPower|wbMin|wbBots|wbParty|wbForce|__proto__|constructor|prototype/i.test(k)){const value=safe(x,depth+1);if(value!==undefined)o[k]=value;}return o;}return undefined;};
       Object.assign(s.settings,safe(values));result=true;break;
     }
     case 'pk':s.pk=!!args[0];result=true;break;
     case 'fashionWearTheme':integer(args[0],0,D.FASHION_THEMES.length-1);result=S.fashionWearTheme(args[0]);break;
-    case 'wearSet':{const key=String(args[0]||'');const candidates=s.inv.filter(it=>it.set===key&&(!it.clsOnly||it.clsOnly===s.cls));for(const slot of D.GEAR_SLOTS){const best=candidates.filter(it=>it.slot===slot.k).sort((a,b)=>b.tier-a.tier||b.ilv-a.ilv)[0];if(best)S.equip(best);}result=true;break;}
+    case 'wearSet':case 'swapWearSet':{const set=D.CLASS_SETS.find(x=>x.k===args[0]);if(!set)throw new Error('invalid_set');if(command==='swapWearSet'){if(W.mode?.pvp)throw new Error('class_change_in_match');S.changeClass(set.cls);}if(set.cls!==s.cls)throw new Error('wrong_class');const n=S.wearSet(set.k);result={ok:true,msg:`สวมชุด ${n} ชิ้น`};break;}
+    case 'buyStarter':{if(!D.CLASSES.some(c=>c.weapon===args[0]))throw new Error('invalid_weapon');integer(args[1],0,2);if(s.inv.length>=S.invMax)throw new Error('inventory_full');result=S.buyStarter(args[0],args[1]);break;}
+    case 'sellJunk':{const before=s.gold;S.sellJunk();result={ok:true,msg:`ขายขยะ ได้ ${s.gold-before} ทอง`};break;}
+    case 'sort':s.inv.sort((a,b)=>b.tier-a.tier||b.ilv-a.ilv);result=true;break;
+    case 'title':{const title=args[0];if(title!==null&&!D.ACHIEVEMENTS.some(a=>a.title===title&&s.ach[a.id])&&!(s.titles||[]).includes(title))throw new Error('title_not_owned');s.title=title;result=true;break;}
+    case 'returnScroll':{if((s.bag.ret||0)<1)throw new Error('not_owned');s.bag.ret--;result={ok:true,town:s.lastTown||'aurelion'};break;}
+    case 'hireContract':if(!D.CLS[args[0]]||!['match','ten','day'].includes(args[1]))throw new Error('invalid_contract');result=S.hireContract(args[0],args[1]);break;
+    case 'mercPreset':{const index=integer(args[1],0,2),list=s.mercPresets[index];if(args[0]==='clear')s.mercPresets[index]=[];else if(args[0]==='remove')list.splice(integer(args[2],0,list.length-1),1);else if(args[0]==='add'){if(!D.CLS[args[2]]||list.length>=14)throw new Error('invalid_mercenary');list.push(args[2]);}else throw new Error('invalid_preset_action');result=true;break;}
+    case 'siegeBuy':if(W.mode?.kind!=='siege'||W.mode.phase!=='prep')throw new Error('siege_preparation_required');result=W.mode.buy(W.player.team,args[0]);break;
+    case 'fashionMany':{if(!['sell','drop'].includes(args[0])||!Array.isArray(args[1])||args[1].length>1000||new Set(args[1]).size!==args[1].length)throw new Error('invalid_items');const worn=new Set(Object.values(s.fashion.eq).filter(Boolean).map(it=>it.uid));const list=args[1].map(uid=>ownedUnlocked(uid,'fashion'));if(list.some(it=>worn.has(it.uid)))throw new Error('item_equipped');const before=s.diamond||0;for(const it of list)S[args[0]==='sell'?'fashionSellDia':'fashionDrop'](it);result={ok:true,msg:args[0]==='sell'?`ขายแฟชั่น ${list.length} ชิ้น ได้ ${(s.diamond||0)-before} เพชร`:`ทิ้งแฟชั่น ${list.length} ชิ้นแล้ว`};break;}
     case 'autoEquip':case 'fashionBest':case 'craftFashion':case 'vaultBuy':result=S[command]();break;
     default:throw new Error('unsupported_command');
   }

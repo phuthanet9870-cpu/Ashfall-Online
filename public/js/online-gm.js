@@ -4,16 +4,19 @@
  const unlock=G.GMX.unlock,lock=G.GMX.lock,gmCmd=UI.gmCmd,act=UI.act;let queue=Promise.resolve();
  G.GMX.unlock=()=>{if(!SW.active)return unlock();return NET.request({t:'online_gm_unlock',code:'gmadmin2008'}).then(()=>{SW.gm=true;unlock();UI.toast('เปิด GM บนเซิร์ฟเวอร์แล้ว','good');}).catch(e=>UI.toast(e.message,'bad'));};
  NET.on('online_ready',m=>{SW.gm=!!m.gm;if(!SW.gm)lock();});NET.on('close',()=>{SW.gm=false;lock();});
- const capture=()=>{const values={};for(const el of document.querySelectorAll('input[id],select[id],textarea[id]'))if(/^(gm|gs|wb)/.test(el.id))values[el.id]=el.type==='checkbox'?el.checked:el.value;const P=UI.panel||{},panel={};for(const k of ['gt','gn','gilv','gcat','gset','gth','gc','gs','gcs'])if(P[k]!==undefined)panel[k]=P[k];return {values,panel,point:S.IN.lastClickW};};
+ const capture=()=>{const values={};for(const el of document.querySelectorAll('input[id],select[id],textarea[id]'))if(/^(gm|gs|gw|wb)/.test(el.id))values[el.id]=el.type==='checkbox'?el.checked:el.value;const P=UI.panel||{},panel={};for(const k of ['gt','gn','gilv','gcat','gset','gth','gc','gs','gcs'])if(P[k]!==undefined)panel[k]=P[k];const bossRates=Object.fromEntries([...document.querySelectorAll('.bwt')].map(el=>[el.dataset.t,+el.value]));return {values,panel,point:S.IN.lastClickW,bossRates};};
  const send=(command,el,input={})=>{
   if(!SW.gm){UI.toast('พิมพ์ /gmadmin2008 เพื่อเปิด GM บนเซิร์ฟเวอร์ก่อน','bad');return;}
-  const data={...capture(),dataset:{...el?.dataset},...input};queue=queue.catch(()=>{}).then(()=>NET.request({t:'online_gm',id:crypto.randomUUID(),command,input:data})).then(m=>{if(m.result){Object.assign(W.gm,m.result.gm,m.result.flags);UI.toast(m.result.msg,'good');if(UI.panel?.id==='gm')UI.renderPanel();}return m;}).catch(e=>UI.toast('GM: '+e.message,'bad'));return queue;
+  const data={...capture(),dataset:{...el?.dataset},...input};queue=queue.catch(()=>{}).then(()=>NET.request({t:'online_gm',id:crypto.randomUUID(),command,input:data})).then(m=>{if(m.result){Object.assign(W.gm,m.result.gm,m.result.flags,m.result.config);UI.toast(m.result.msg,'good');if(UI.panel?.id==='gm')UI.renderPanel();}return m;}).catch(e=>UI.toast('GM: '+e.message,'bad'));return queue;
  };
  UI.gmCmd=(command,el)=>{
   if(!SW.active)return gmCmd(command,el);
-  if(command==='gmset'||['export','dgsim'].includes(command))return gmCmd(command,el);
+  if(command==='gmset'||['export','dgsim','gmbslot','gmbc','bwsim'].includes(command))return gmCmd(command,el);
   if(command==='gmlock'){NET.request({t:'online_gm_lock'}).then(()=>{SW.gm=false;lock();UI.closePanel();}).catch(e=>UI.toast(e.message,'bad'));return;}
   if(['show','showv','showstop','sktry'].includes(command))return gmCmd(command,el);
+  if(command==='mkguildq'){if(!SW.gm)return;if(S.save.guild)return UI.toast('มีกิลด์แล้ว','info');NET.send({t:'g_create',name:'GM '+NET.pid.slice(-10),tag:NET.pid.slice(-4).toUpperCase().replace(/[^A-Z0-9]/g,'X')});return;}
+  if(command==='challenge'||command==='gbchal'){if(!SW.gm)return;const rival=command==='gbchal'?S.save.rivals.find(r=>r.name===el.dataset.n):S.save.rivals.find(r=>r.oid||r.id);if(!S.save.guild||!rival)return UI.toast('ต้องมีกิลด์และกิลด์คู่ต่อสู้ก่อน','bad');UI.closePanel();UI.challengePopup(rival);return;}
+  if(command==='bwgo'){if(!SW.gm)return;UI.closePanel();S.goPvP({mode:'boss',map:8,size:15,diff:2,mercs:true});return;}
   if(command==='dgenter'){send('dgunlock',el)?.then(m=>{if(m?.result)S.goDungeon(document.getElementById('gmdg').value,+document.getElementById('gmfloor').value||1,0);});return;}
   return send(command,el);
  };
@@ -27,7 +30,7 @@
   return act(el,e);
  };
  document.addEventListener('change',e=>{if(!SW.active||!e.target.dataset.gm)return;e.stopImmediatePropagation();const el=e.target,key=el.dataset.gm,enabled=el.checked;if(!SW.gm){el.checked=!enabled;UI.toast('พิมพ์ /gmadmin2008 ก่อน','bad');return;}send('flag',{dataset:{k:key}},{enabled});},true);
- const render=UI.gmRender,supported=new Set('setlv maxlv setcls gmcls cur dia tix reroll stones cons pets ach infamy0 heal tp pspd give gmcat gmgive kit kit2 allmax autons runekit fashkit gmsrall gems clearinv dropground spawn mkill dgclear killall mfreeze mheal mpull mclear rates announce wbnow dgunlock dgdaily pvpwin pvplose score prep skset skreset gmset export dgsim gmlock show showv showstop sktry dgenter'.split(' '));
+ const render=UI.gmRender,supported=new Set('import rating gwsave gwtest bwsave mkguildq challenge gbchal gmbase gmbslot gmbc mercmax bpmode wbint bwgo bwsim setlv maxlv setcls gmcls cur dia tix reroll stones cons pets ach infamy0 heal tp pspd give gmcat gmgive kit kit2 allmax autons runekit fashkit gmsrall gems clearinv dropground spawn mkill dgclear killall mfreeze mheal mpull mclear rates announce wbnow dgunlock dgdaily pvpwin pvplose score prep skset skreset gmset export dgsim gmlock show showv showstop sktry dgenter'.split(' '));
  UI.gmRender=(tab,P)=>{const html=render(tab,P);if(!SW.active)return html;return html.replace(/<button\b[^>]*data-act="gm"[^>]*>/g,tag=>{const command=tag.match(/data-c="([^"]+)"/)?.[1];return command&&!supported.has(command)?tag.replace(/>$/,' disabled title="คำสั่งนี้ยังไม่รองรับในโลกออนไลน์">'):tag;});};
  SW.gmCommand=(command,input={})=>send(command,null,input);
 })(window.G);

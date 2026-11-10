@@ -30,7 +30,7 @@
   NET.on('g_list', m => { st.guilds = m.guilds || []; rerender('guild'); });
   NET.on('g_reqin', m => { UI.toast(`${m.from.name} ขอเข้ากิลด์ ${m.guild}`, 'good'); UI.log(`[กิลด์] ${m.from.name} ขอเข้ากิลด์`, 'sys'); });
   NET.on('g_chat', m => { st.gchat.push({ from: m.from.name, text: m.text }); if (st.gchat.length > 60) st.gchat.shift(); UI.log(`[กิลด์] ${m.from.name}: ${m.text}`, 'chat'); rerender('guild'); });
-  NET.on('g_info', m => { st.guild = m.guild; const s = S.save; if (!s) return;
+  NET.on('g_info', m => { st.guild = m.guild; const s = S.save; if (!s) return;if(G.SHARED_WORLD?.active){G.SHARED_WORLD.syncGuild?.();rerender('guild');return;}
     if (m.guild) { if (!s.guild || s.guild.oid !== m.guild.id) { if (!s.guild) S.createGuild(m.guild.name, m.guild.tag); s.guild.name = m.guild.name; s.guild.tag = m.guild.tag; s.guild.oid = m.guild.id; S.persist && S.persist(); S.refreshPlayer && S.refreshPlayer(); } }
     else if (s.guild && s.guild.oid) { delete s.guild.oid; s.guild = null; S.persist && S.persist(); S.refreshPlayer && S.refreshPlayer(); }
     rerender('guild'); });
@@ -71,7 +71,7 @@
     UI.modal(`<h2>${esc(npc.name)}</h2><p class="muted">ผู้เล่นออนไลน์จริง</p><div class="list">${isF ? `<button class="btn primary" data-act="so-pmto" data-pid="${pid}" data-go="1">💬 กระซิบ</button>` : `<button class="btn primary" data-act="so-add" data-pid="${pid}">+ เพิ่มเพื่อน</button>`}${g && g.myRole !== 'member' ? '' : ''}<button class="btn" data-act="x-close">ปิด</button></div>`); };
   // ---------- actions ----------
   const val = id => (($('#' + id) || {}).value || '').trim();
-  const a0 = UI.act; UI.act = (el, e) => { const a = el.dataset.act; if (!a || !a.startsWith('so-')) { const r = a0(el, e); if (a === 'mkguild' && S.save && S.save.guild && !S.save.guild.oid && NET.connected) NET.send({ t: 'g_create', name: S.save.guild.name, tag: S.save.guild.tag }); return r; }
+  const a0 = UI.act; UI.act = (el, e) => { const a = el.dataset.act;if(a==='mkguild'&&G.SHARED_WORLD?.active){NET.send({t:'g_create',name:val('gname'),tag:val('gtag')});return;} if (!a || !a.startsWith('so-')) { const r = a0(el, e); if (a === 'mkguild' && S.save && S.save.guild && !S.save.guild.oid && NET.connected) NET.send({ t: 'g_create', name: S.save.guild.name, tag: S.save.guild.tag }); return r; }
     const P = UI.panel || {};
     switch (a) {
       case 'so-add': NET.send({ t: 'fr_req', to: el.dataset.pid }); UI.closeModal && UI.closeModal(); break;

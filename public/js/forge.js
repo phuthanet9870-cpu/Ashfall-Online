@@ -79,6 +79,7 @@
     P.ffx = null; P.fmsg = null; return out; };
   // ---------- actions (wrap enchant/socket/reforge/reroll to drive the stage effect) ----------
   const fx = (ok, msg) => { const P = UI.panel; if (!P || P.role !== 'smith') return; P.ffx = ok ? 'ok' : 'fail'; P.fmsg = msg; const p = W.player; if (ok && p && V) try { V.pillar(p.x, p.y, '#ffd84a', 80, 0.8, 8); } catch (e) { } };
+  UI.forgeFx=fx;
   const a0 = UI.act; UI.act = (el, e) => { const a = el.dataset.act, P = UI.panel;
     if (!P || P.id !== 'npc' || P.role !== 'smith') return a0(el, e);
     const sel = P.sel ? find(P.sel) : null; const msg = r => typeof r === 'string' ? r : r && r.msg;

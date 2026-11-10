@@ -341,7 +341,7 @@
   S.DungeonMode = (dgId, startFloor, mercN = 0) => {
     const dg = D.DUNGEONS.find(d => d.id === dgId);
     const M = {
-      kind: 'dungeon', dg, floor: startFloor, startFloor, allowMount: false, run: { cleared: 0, bosses: [], king: false, got: [] }, mercs: [], portals: [], ended: false,
+      kind: 'dungeon', mercN, dg, floor: startFloor, startFloor, allowMount: false, run: { cleared: 0, bosses: [], king: false, got: [] }, mercs: [], portals: [], ended: false,
       build() { return genDungeon(dg, this.floor); },
       init() {
         const s = S.save; const d = s.dungeons[dgId] = s.dungeons[dgId] || { best: 0, cp: 0, daily: { date: '', runs: 0 } };

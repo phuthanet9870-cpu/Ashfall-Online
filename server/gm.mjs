@@ -20,6 +20,15 @@ export function executeGM(world,record,command,input={}) {
   case 'reroll':s.bag.reroll=(s.bag.reroll||0)+50;break;
   case 'stones':s.bag.stones=s.bag.stones.map(q=>q+50);break;
   case 'cons':for(const key of ['hpPot','mpPot','ret','foodXp','foodDrop','protect','reforge'])s.bag[key]=(s.bag[key]||0)+50;break;
+  case 'import':{let imported;try{imported=JSON.parse(String(v.gmsave||''));}catch{throw new Error('invalid_save_json');}if(!imported||!D.CLS[imported.cls]||!Array.isArray(imported.inv)||imported.inv.length>1000||!Array.isArray(imported.runeBoard)||!imported.eq||!imported.fashion||JSON.stringify(imported).length>1500000)throw new Error('invalid_save');const next={...S.newSave(s.name,imported.cls),...imported,_worldCharacter:record.character};for(const key of ['gold','honor','war','diamond','thread','runeDust','jewelDust','xp'])if(!Number.isFinite(next[key])||next[key]<0||next[key]>1e12)throw new Error('invalid_balance');next.lvl=Math.floor(number(next.lvl,1,D.MAX_LV));delete next._siegeEscrow;delete next._onlineMarket;S.save=next;record.save=next;S.calcPlayer();break;}
+  case 'rating':if(!s.guild)throw new Error('guild_required');s.guild.rating=Math.floor(n('gmrating',0,100000,1000));break;
+  case 'gwsave':Object.assign(D.GUILD_WIN_REWARD,{gold:n('gwgold',0,1e9,3000),war:n('gwwar',0,1e6,150),guildXp:n('gwxp',0,1e6,300),minTier:Math.floor(n('gwtier',1,10,5)),items:Math.floor(n('gwn',0,10,1))});W.gm.guildWin={...D.GUILD_WIN_REWARD};break;
+  case 'gwtest':if(!s.guild)throw new Error('guild_required');S.guildWinBonus({});break;
+  case 'bwsave':{const rates=input.bossRates;if(!rates||typeof rates!=='object')throw new Error('invalid_boss_rates');const next={};for(const tier of [4,5,6,7,8,9,10])next[tier]=number(rates[tier],0,100000,0);if(!Object.values(next).some(x=>x>0))throw new Error('empty_boss_rates');Object.assign(D.BOSS_CLASH_RATES,next);W.gm.bossRates={...D.BOSS_CLASH_RATES};break;}
+  case 'mercmax':for(const cls of D.CLASSES)S.merc(cls.id).m=150;break;
+  case 'gmbase':{const base=D.ITEM_BASES.find(b=>b.id===d.k);if(!base)throw new Error('invalid_item_base');const t=U.clamp(Math.floor(number(P.gt,1,10,base.tmin)),base.tmin,base.tmax);add(S.genItem(base.kind,t,ilv(),{slot:base.slot,color:base.color,base:base.id,pvp:true}));break;}
+  case 'bpmode':if(!['farm','equal'].includes(d.v))throw new Error('invalid_bot_mode');s.settings.botPower=d.v;break;
+  case 'wbint':{const minutes=number(d.v,5,60);if(![5,10,15,30,60].includes(minutes))throw new Error('invalid_boss_interval');W.gm.wbMin=minutes;s.settings.wbMin=minutes;break;}
   case 'pets':s.pets=D.PETS.map(x=>x.k);s.mounts=D.MOUNTS.map(x=>x.k);break;
   case 'ach':for(const a of D.ACHIEVEMENTS)S.ach(a.id);break;
   case 'infamy0':s.infamy=0;p.red=false;break;
@@ -94,8 +103,8 @@ export function executeGM(world,record,command,input={}) {
   case 'pvpwin':case 'pvplose':{const winner=command==='pvpwin'?p.team:1-p.team;if(W.mode.kind==='pvp')W.mode.finish(winner);else if(W.mode.kind==='siege')W.mode.endWar(winner);else throw new Error('match_required');break;}
   case 'score':if(W.mode.score)W.mode.score[p.team]+=10;else throw new Error('match_required');break;
   case 'prep':if(W.mode.kind!=='siege')throw new Error('siege_required');W.mode.prepT=0;break;
-  case 'skset':case 'skreset':{const cls=D.CLS[P.gc],slot=Math.floor(number(P.gs,0,D.NSK-2,0));if(!cls)throw new Error('invalid_class');const skill=cls.skills[slot];if(command==='skreset')Object.assign(skill,structuredClone(skill.base));else{for(const key of ['p','c','r','R','n','d','v'])skill[key]=n('gs'+key,0,key==='p'?1000:100,skill[key]||0);skill.n=Math.max(1,Math.floor(skill.n));skill.cc={};for(const token of String(v.gscc||'').slice(0,100).split(/\s+/)){const match=token.match(/^([a-z]+)([\d.]+)$/);if(match&&D.CC_TH[match[1]])skill.cc[match[1]]=number(match[2],0,60);}skill.dmg=!!D.ARCH[skill.arch].dmg&&skill.p>0;}W.gm.skillOverrides ||= {};W.gm.skillOverrides[P.gc+':'+slot]=structuredClone(skill);W.gm.rulesVersion=(W.gm.rulesVersion||0)+1;break;}
+  case 'skset':case 'skreset':{const cls=D.CLS[P.gc],slot=Math.floor(number(P.gs,0,D.NSK-2,0));if(!cls)throw new Error('invalid_class');const skill=cls.skills[slot];if(command==='skreset')Object.assign(skill,structuredClone(skill.base));else{const next={...skill};for(const key of ['p','c','r','R','n','d','v'])next[key]=n('gs'+key,0,key==='p'?1000:100,skill[key]||0);next.n=Math.max(1,Math.floor(next.n));next.cc={};for(const token of String(v.gscc||'').slice(0,100).split(/\s+/)){const match=token.match(/^([a-z]+)([\d.]+)$/);if(match&&D.CC_TH[match[1]])next.cc[match[1]]=number(match[2],0,60);}next.dmg=!!D.ARCH[next.arch].dmg&&next.p>0;Object.assign(skill,next);}W.gm.skillOverrides ||= {};W.gm.skillOverrides[P.gc+':'+slot]=structuredClone(skill);W.gm.rulesVersion=(W.gm.rulesVersion||0)+1;break;}
   default:throw new Error('unsupported_server_gm_command');
  }
- world.sync(record.id);return {ok:true,msg:'GM: บันทึกคำสั่งบนเซิร์ฟเวอร์แล้ว',gm:Object.fromEntries(Object.entries(W.gm).filter(([,value])=>typeof value==='boolean'||typeof value==='number')),flags};
+ world.sync(record.id);return {ok:true,msg:'GM: บันทึกคำสั่งบนเซิร์ฟเวอร์แล้ว',gm:Object.fromEntries(Object.entries(W.gm).filter(([,value])=>typeof value==='boolean'||typeof value==='number')),flags,config:{bossRates:D.BOSS_CLASH_RATES,guildWin:D.GUILD_WIN_REWARD}};
 }

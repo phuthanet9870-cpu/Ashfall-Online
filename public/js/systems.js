@@ -161,12 +161,15 @@
     S.applyFlags(u, c); u.isPlayer = true; u.home = { x, y };
     W.player = u; E.spawn(u); S.setupPet(u); return u;
   };
+  S.applyMount=(u,key)=>{
+    const mt = D.MOUNTS.find(m => m.k === key); u.mountDef = mt || null; u.mountSpr = mt ? SPR.petSprite(mt.k === 'griffin' ? 'beast' : mt.k === 'warmount' ? 'golem' : 'beast', mt.c) : null;
+    if (mt) { const full = SPR.monSheet(mt.k === 'warmount' ? 'golem' : 'beast', mt.c, U.shade(mt.c, -0.35)); u.mountSpr = full; }
+  };
   S.applyFlags = (u, c) => {
     u.relic = c.flags.relic; u.relicV = c.flags.relicV; u.core = c.flags.core; u.affix = c.flags.affix; u.sets = c.fx;
     const s = S.save; const sr = s.skillRunes[s.cls] || {}; u.runes = []; for (let i = 0; i < D.NSK; i++) u.runes[i] = sr[i] || 0;
     u.fashion = s.fashion.eq; const fr = s.fashion.eq.f_frame; u.frame = fr ? fr.colors[1] : null; u.title = s.title; u.guildTag = s.guild ? s.guild.tag : null;
-    const mt = D.MOUNTS.find(m => m.k === s.mount); u.mountDef = mt || null; u.mountSpr = mt ? SPR.petSprite(mt.k === 'griffin' ? 'beast' : mt.k === 'warmount' ? 'golem' : 'beast', mt.c) : null;
-    if (mt) { const full = SPR.monSheet(mt.k === 'warmount' ? 'golem' : 'beast', mt.c, U.shade(mt.c, -0.35)); u.mountSpr = full; }
+    S.applyMount(u,s.mount);
     u.cpv = c.cp; u.pk = s.pk;
   };
   S.refreshPlayer = (heal) => {

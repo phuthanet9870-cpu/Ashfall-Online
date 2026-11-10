@@ -4,15 +4,18 @@
   const NET=window.ASHFALL_NET;if(!NET)return;
   const {W,E,S,D,U,UI,VFX:V,SPR}=G;
   const SW=G.SHARED_WORLD={active:false,ready:false,room:'',playerId:'',revision:-1,characterRevision:0};
+  const preview=S.previewSkill;if(preview)S.previewSkill=(...args)=>{const active=SW.active;SW.active=false;try{return preview(...args);}finally{if(W.mode?.kind!=='gallery')SW.active=active;}};
+  if(G.WB){const interval=G.WB.interval;G.WB.interval=()=>SW.active?(W.gm.wbMin||15)*60000:interval();}
   const nativeEnter=S.enter,nativePersist=S.persist,nativeRefresh=S.refreshPlayer;
   let lastSettings='',settingsTimer=null,lastCache=0,lastGear='',lastPanel='';let wanted=null,request='',currentMap=null,currentCharacter='',currentServer='',nextJoin=0,intent=null,moving=false,lastIntent=0,lastPotion=0,applying=false,official=null,commandChain=Promise.resolve();
+  const remotePets=new Map();
   const entities=new Map(),pickups=new Map(),pending=new Map();
   const send=o=>{if(NET.connected)NET.send(o);};
   function charId(){if(!S.save)return '';if(!S.save._worldCharacter){S.save._worldCharacter=crypto.randomUUID();nativePersist();}return S.save._worldCharacter;}
-  function descriptor(mode){switch(mode.kind){case 'town':return{kind:'town',id:'aurelion'};case 'farm':return{kind:'farm',id:mode.def.id};case 'dungeon':return{kind:'dungeon',id:mode.dg.id,floor:mode.startFloor||mode.floor,instance:'public'};case 'wbarena':return{kind:'wbarena',id:'wbarena'};case 'pvp':return{kind:'pvp',id:mode.cfg.mode,map:mode.cfg.map,size:mode.cfg.size,normalized:mode.cfg.normalized};case 'siege':return{kind:'siege',size:mode.cfg.size};default:return null;}}
+  function descriptor(mode){switch(mode.kind){case 'town':return{kind:'town',id:'aurelion'};case 'farm':return{kind:'farm',id:mode.def.id};case 'dungeon':return{kind:'dungeon',id:mode.dg.id,floor:mode.startFloor||mode.floor,instance:'public',mercs:mode.mercN||0};case 'wbarena':return{kind:'wbarena',id:'wbarena',bots:!!mode.bots,party:S.save.settings.wbParty||0};case 'pvp':return{kind:'pvp',id:mode.cfg.mode,map:mode.cfg.map,size:mode.cfg.size,normalized:mode.cfg.normalized,mercs:!!mode.cfg.mercs,preset:mode.cfg.preset||0,diff:mode.cfg.diff||1};case 'siege':return{kind:'siege',size:mode.cfg.size,type:mode.cfg.type||'ranked',stake:mode.cfg.stake||0,rival:mode.cfg.rival?.oid||mode.cfg.rival?.id};default:return null;}}
   function siegeView(mode){const team=W.player?.team||0,R=mode.R||mode.roles(),view={...mode};for(const key of ['pool','hold','tickets','kills'])if(mode[key])view[key]=team?[mode[key][1],mode[key][0]]:mode[key];view.line=team?-mode.line:mode.line;view.R={...R,att:R.att<0?R.att:R.att^team,def:R.def<0?R.def:R.def^team};view.roles=()=>view.R;return view;}
   const prepTick=UI.siegePrepTick;UI.siegePrepTick=mode=>prepTick(SW.active&&mode.kind==='siege'?siegeView(mode):mode);
-  S.enter=mode=>{if(SW.ready)send({t:'online_leave'});wanted=descriptor(mode);SW.active=!!wanted;SW.ready=false;request=crypto.randomUUID();currentMap=null;
+  S.enter=mode=>{W.onlinePets=[];remotePets.clear();if(SW.ready)send({t:'online_leave'});wanted=descriptor(mode);SW.active=!!wanted;SW.ready=false;request=crypto.randomUUID();currentMap=null;
     if(!wanted)return nativeEnter(mode);
     if(mode.kind==='siege'){const hud=mode.hud;mode.hud=function(){return hud.call(siegeView(this));};}
     const init=mode.init;mode.init=()=>{const m=W.map;mode.portals=[];if(mode.kind==='siege')Object.assign(mode,{hold:[0,0],tickets:[0,0],R:mode.roles(),throne:0,structs:[],respawn:[]});if(mode.kind==='town')mode.portals=(m.warps||[]).map(w=>({x:w.x,y:w.y,step:true,use:()=>w.to==='wb'?S.goWorldBoss(false):w.to==='dg'?UI.openPanel('dungeon'):S.goFarm(w.to)}));else if(['farm','wbarena'].includes(mode.kind)&&m.portalPt)mode.portals=[{...m.portalPt,step:true,use:()=>S.goTown('aurelion')}];};
@@ -55,16 +58,16 @@
     for(const [i,tile,block,fall,pvp]of state.mapPatch||[]){W.map.tiles[i]=tile;W.map.block[i]=block;W.map.fall[i]=fall;W.map.pvp[i]=pvp;}
     for(const q of SW._unitStates.values()){const me=q.pid===SW.playerId;let u=me?W.player:entities.get(q.id);
       if(!u){if(q.kind==='mob')u=S.mkMob(q.md,q.lvl,q.grade,q.x,q.y,{elem:q.elem});else if(q.cls&&D.CLS[q.cls])u=E.heroUnit(q.cls,q.lvl,q.team,{x:q.x,y:q.y,name:q.name});else u=E.mkUnit({kind:q.kind,team:q.team,x:q.x,y:q.y,name:q.name,body:q.body,col:q.col,col2:q.col2,st:{},look:q.kind==='npc'?SPR.lookFor(q.look?.cls||'blademaster'):undefined});}
-      const oldHp=u.hp,oldX=u.x,oldY=u.y;u._worldId=q.id;u._shared=true;seen.add(q.id);entities.set(q.id,u);
-      for(const k of Object.keys(q))if(!['id','owner','anim','look','damage'].includes(k))u[k]=q[k];u.id=q.id;u.anim.at=q.anim?.at||0;u.anim.ct=q.anim?.ct||0;
+      const oldHp=u.hp,oldX=u.x,oldY=u.y,oldMount=u.mountId;u._worldId=q.id;u._shared=true;seen.add(q.id);entities.set(q.id,u);
+      for(const k of Object.keys(q))if(!['id','owner','anim','look','damage'].includes(k))u[k]=q[k];u.id=q.id;if(!me&&oldMount!==q.mountId)S.applyMount(u,q.mountId);u.anim.at=q.anim?.at||0;u.anim.ct=q.anim?.ct||0;
       if(q.pid&&!me){u.online=q.pid.split(':')[0];NET.peerPid.set(u.online,u.online);}
       if(me){u._authX=q.x;u._authY=q.y;if(SW._predict&&oldHp>0&&!q.dead&&U.d2(oldX,oldY,q.x,q.y)<36){u.x=oldX;u.y=oldY;}SW._predict=true;}
       if(!me){u._tx=q.x;u._ty=q.y;if(U.d2(oldX,oldY,q.x,q.y)<64){u.x=oldX;u.y=oldY;}}
       if(q.kind==='struct'&&q.sub!=='turret'&&!u.propSpr)u.propSpr=SPR.prop(q.sub==='tower'?'tower':'portal',{c:q.team?'#aa4444':'#4488aa'});
       if(oldHp>q.hp&&!q.dead&&E.vis(q.x,q.y)){u.flash=.1;V.text(q.x,q.y,U.fmt(oldHp-q.hp),me?'#ff5a5a':'#ffffff',{size:8});}
-      if(me&&m.self){if(m.self.gm)Object.assign(W.gm,m.self.gm,m.self.gmFlags);u.st=m.self.st;u.cds=Float32Array.from(m.self.cds);u.gcd=m.self.gcd;u.runes=m.self.runes;u.sets=m.self.sets;}
+      if(me&&m.self){if(m.self.gmConfig)Object.assign(W.gm,m.self.gmConfig);if(m.self.gm)Object.assign(W.gm,m.self.gm,m.self.gmFlags);u.st=m.self.st;u.cds=Float32Array.from(m.self.cds);u.gcd=m.self.gcd;u.runes=m.self.runes;u.sets=m.self.sets;}
     }
-    for(const id of entities.keys())if(!seen.has(id))entities.delete(id);W.units=[...entities.values()];if(['pvp','siege'].includes(state.kind))W.mode.team=[W.units.filter(u=>u.pid&&u.team===0),W.units.filter(u=>u.pid&&u.team===1)];
+    for(const id of entities.keys())if(!seen.has(id))entities.delete(id);W.units=[...entities.values()];if(['pvp','siege'].includes(state.kind))W.mode.team=[W.units.filter(u=>(u.pid||u.isMerc)&&u.team===0),W.units.filter(u=>(u.pid||u.isMerc)&&u.team===1)];
     for(const q of SW._unitStates.values())if(q.damage){const unit=entities.get(q.id);unit.wbDmg=new Map(q.damage.map(([id,n])=>[entities.get(id),n]).filter(([u])=>u));}
     if(state.kind==='pvp')W.mode.boss=entities.get(state.mode.bossId)||null;
     if(state.kind==='wbarena')W.mode.boss=W.units.find(u=>u.isWB&&!u.dead)||null;
@@ -85,10 +88,10 @@
     try{if(!official&&S.save._worldCharacter){const key='ashfall_legacy_backup_'+S.save._worldCharacter;if(!globalThis.ASHFALL_STORAGE.getItem(key))globalThis.ASHFALL_STORAGE.setItem(key,JSON.stringify(S.save));}}catch{}
     const settings={...S.save.settings};official=structuredClone(m.save);UI.market=structuredClone(m.save._onlineMarket?.items||[]);SW.characterRevision=m.revision;applying=true;
     try{S.save=structuredClone(m.save);S.save.settings={...S.save.settings,...settings};
-      const gear=JSON.stringify([m.save.cls,m.save.lvl,m.save.eq,m.save.runeBoard,m.save.skillRunes,m.save.fashion,m.save.pet,m.save.mount]),panel=JSON.stringify([m.save.inv,m.save.bag,m.save.gold,m.save.honor,m.save.war,m.save.diamond,m.save.gacha,m.save.vault,m.save._onlineMarket]);
+      const gear=JSON.stringify([m.save.cls,m.save.lvl,m.save.eq,m.save.runeBoard,m.save.skillRunes,m.save.fashion,m.save.pet,m.save.mount,m.save.title]),panel=JSON.stringify([m.save.inv,m.save.bag,m.save.gold,m.save.honor,m.save.war,m.save.diamond,m.save.gacha,m.save.vault,m.save._onlineMarket,m.save.title,m.save.ach,m.save.mercs,m.save.mercPresets,m.save.guild,m.save.rivals,m.save.quests,m.save.codex]);
       const changed=gear!==lastGear||panel!==lastPanel;
       if(changed||performance.now()-lastCache>5000){nativePersist();lastCache=performance.now();}
-      if(W.player&&gear!==lastGear){W.player.cls=S.save.cls;W.player.look=S.lookPlayer();S.applyFlags(W.player,{...S.calcPlayer()});}
+      if(W.player&&gear!==lastGear){W.player.cls=S.save.cls;W.player.look=S.lookPlayer();S.applyFlags(W.player,{...S.calcPlayer()});S.setupPet(W.player);}
       if(changed){UI.refreshHud?.(true);if(UI.panel?.id)UI.renderPanel();}lastGear=gear;lastPanel=panel;
     }finally{applying=false;}
   });
@@ -102,9 +105,9 @@
     }});
   NET.on('online_command_result',m=>{const p=pending.get(m.id);if(p){clearTimeout(p.timer);pending.delete(m.id);p.resolve(m.result);}});
   SW.command=(command,args=[])=>{commandChain=commandChain.catch(()=>{}).then(()=>new Promise((resolve,reject)=>{if(!SW.ready)return reject(new Error('world_not_ready'));const id=crypto.randomUUID(),timer=setTimeout(()=>{pending.delete(id);reject(new Error('command_timeout'));},20000);const resend=()=>send({t:'online_command',id,revision:SW.characterRevision,command,args});pending.set(id,{resolve,reject,timer,resend,retries:0});resend();}));return commandChain;};
-  const command=(name,args)=>{SW.command(name,args).then(r=>{if(name==='gacha'&&r?.rolls)UI.gachaReveal?.(r.rolls.map(row=>({...row,img:row.it?UI.itemIcon(row.it):row.petKey?UI.petIcon(row.petKey):''})),args[0]);if(r?.msg)UI.toast(r.msg,r.ok===false?'bad':'good');}).catch(e=>UI.toast(e.message,'bad'));};
+  const command=(name,args)=>{SW.command(name,args).then(r=>{if(name==='returnScroll'&&r?.town)S.goTown(r.town);if(name==='autoEquip')UI.autoEquipReport?.(r);if(['enchant','refine','reforge','drillSocket','rerollMain','rerollOptions'].includes(name)&&r&&typeof r==='object')UI.forgeFx?.(r.up??r.ok,r.msg);if(name==='gacha'&&r?.rolls)UI.gachaReveal?.(r.rolls.map(row=>({...row,img:row.it?UI.itemIcon(row.it):row.petKey?UI.petIcon(row.petKey):''})),args[0]);if(r?.msg)UI.toast(r.msg,r.ok===false?'bad':'good');if(UI.panel?.id)UI.renderPanel();}).catch(e=>UI.toast(e.message,'bad'));};
   function wire(v){if(Array.isArray(v))return v.map(wire);if(v&&typeof v==='object'&&v.uid)return {$item:v.uid};return v;}
-  const methods=['equip','unequip','sell','salvage','enchant','refine','reforge','socket','unsocket','fusion','runeUpgrade','runeEquip','runeRemove','setSkillRune','fashionEquip','fashionRemove','dye','craftFashion','useFood','changeClass','autoEquip','fashionBest','fashionWearTheme','wearSet','vaultBuy','drillSocket','rerollMain','rerollOptions','openPack','fashionSellDia','fashionDrop','buyDiamond','buyTicket'];
+  const methods=['equip','unequip','sell','salvage','enchant','refine','reforge','socket','unsocket','fusion','runeUpgrade','runeEquip','runeRemove','setSkillRune','fashionEquip','fashionRemove','dye','craftFashion','useFood','changeClass','autoEquip','fashionBest','fashionWearTheme','wearSet','vaultBuy','drillSocket','rerollMain','rerollOptions','openPack','fashionSellDia','fashionDrop','buyDiamond','buyTicket','buyStarter','sellJunk'];
   for(const name of methods){const old=S[name];if(typeof old!=='function')continue;S[name]=(...args)=>{if(!SW.active||applying)return old(...args);let values=args.map(wire);if(name==='fusion')values=[args[0].map(it=>it.uid)];command(name,values);return ['sell','salvage','fashionSellDia'].includes(name)?0:true;};}
   const buy=S.buy;S.buy=(entry,n=1)=>{if(!SW.active)return buy(entry,n);const i=S.SHOP.findIndex(e=>e.key===entry.key&&e.stone===entry.stone&&e.cur===entry.cur);command('buy',[i,n]);return true;};
   const buyFrom=S.buyFrom;S.buyFrom=e=>{if(!SW.active)return buyFrom(e);const entries=e.cur==='honor'?S.honorShop():S.warShop();command('buyFrom',[e.cur,entries.findIndex(x=>x.th===e.th)]);return true;};
@@ -118,7 +121,9 @@
     for(const projectile of W.projs){projectile.x+=(projectile.vx||0)*dt;projectile.y+=(projectile.vy||0)*dt;}
     for(const u of W.units){u.anim.t+=dt;if(u!==p&&u._tx!=null){u.x+=(u._tx-u.x)*Math.min(1,dt*14);u.y+=(u._ty-u.y)*Math.min(1,dt*14);}if(u.flash>0)u.flash-=dt;}
     for(let i=W.timers.length-1;i>=0;i--){const t=W.timers[i];t.t-=dt;if(t.t<=0){W.timers.splice(i,1);t.fn();}}
-    if(SW.ready&&!p.dead)for(const l of W.loots)if(U.d2(l.x,l.y,p.x,p.y)<=1.44&&performance.now()-(pickups.get(l.id)||-10000)>1500){pickups.set(l.id,performance.now());send({t:'online_pickup',id:l.id});}
+    if(SW.ready&&!p.dead)for(const l of W.loots)if(U.d2(l.x,l.y,p.x,p.y)<=(W.mode.kind==='dungeon'&&l.t>.4?16:S.save.pet&&S.save.settings.autoLoot&&l.t>.6?36:1.44)&&performance.now()-(pickups.get(l.id)||-10000)>1500){pickups.set(l.id,performance.now());send({t:'online_pickup',id:l.id});}
+    W.onlinePets=[];const follow=(pet,u)=>{const tx=u.x-u.fx*.9+.3,ty=u.y-u.fy*.9-.3,d=Math.hypot(tx-pet.x,ty-pet.y);pet.moving=d>.3;if(d>8){pet.x=tx;pet.y=ty;}else if(pet.moving){const sp=Math.min(d,(u.moveSpd+.5)*dt*(d>2?2:1));pet.flip=tx<pet.x;pet.x+=(tx-pet.x)/d*sp;pet.y+=(ty-pet.y)/d*sp;}};if(W.pet)follow(W.pet,p);
+    for(const[id,u]of entities)if(u!==p&&u.petId&&!W.mode.noPet){const def=D.PETS.find(x=>x.k===u.petId);if(!def)continue;let pet=remotePets.get(id);if(!pet||pet.def.k!==u.petId){pet={def,spr:SPR.petSprite(def.body,def.c),x:u.x-.8,y:u.y+.5};remotePets.set(id,pet);}follow(pet,u);W.onlinePets.push(pet);}for(const id of remotePets.keys())if(!entities.has(id))remotePets.delete(id);
     V.update(dt);return dt;};
   E.walkTo=(u,x,y,dt,stop=.15)=>{if(SW.active&&u===W.player){const destination={x,y},result=walk(u,x,y,dt,stop);intent=destination;return result;}return walk(u,x,y,dt,stop);};
   E.move=(u,dx,dy)=>{if(SW.active&&u===W.player){intent={x:U.clamp(u.x+dx*12,0,W.map.w-.1),y:U.clamp(u.y+dy*12,0,W.map.h-.1)};return move(u,dx,dy);}return move(u,dx,dy);};
@@ -129,13 +134,25 @@
   const marketList=S.marketList,openNpc=UI.openNpc;
   S.marketList=()=>SW.active?structuredClone(S.save._onlineMarket?.items||[]):marketList();
   UI.openNpc=(npc,...args)=>{const result=openNpc(npc,...args);if(SW.active&&(npc.role||npc)==='market')SW.command('marketRefresh').then(()=>{if(UI.panel?.role==='market')UI.renderPanel();}).catch(e=>UI.toast(e.message,'bad'));return result;};
+  const openPanel=UI.openPanel;UI.openPanel=(id,...args)=>{const result=openPanel(id,...args);if(id==='guild'&&SW.ready)SW.syncGuild();return result;};
+  SW.syncGuild=()=>{if(SW.ready)command('guildSync',[]);};
+  SW.sellMany=ids=>SW.command('sellMany',[ids]);
   const act=UI.act;
   UI.act=(el,e)=>{const action=el.dataset.act;if(NET.authed&&NET.features?.onlineAuthority===2&&['sl-delyes','sl-restore'].includes(action)){const slot=action==='sl-delyes'?UI._slAsk:UI._trash?.i,save=action==='sl-delyes'?S.slots()[slot]:UI._trash?.sv;if(save?._worldCharacter){NET.request({t:action==='sl-delyes'?'online_character_delete':'online_character_restore',character:save._worldCharacter}).then(()=>act(el,e)).catch(error=>UI.toast(error.message,'bad'));return;}}if(!SW.active)return act(el,e);const a=el.dataset.act,P=UI.panel||{},s=S.save,uid=el.dataset.uid||P.sel;
-    if(a==='gm'||a?.startsWith('gm')||a==='wipe'||a==='sl-delyes'||a==='askwipe'){UI.toast('คำสั่งนี้ใช้ไม่ได้กับตัวละครออนไลน์','bad');return;}
-    const direct={runepage:['page',[+el.dataset.i]],setpet:['pet',[el.dataset.k||null]],setmount:['mount',[el.dataset.k||null]],pk:['pk',[!s.pk]],'x-lock':['lock',[uid,!UI.findItem(uid)?.lock]],'vl-buy':['vaultBuy',[]],'vl-put':['vaultDeposit',[uid]],'vl-take':['vaultWithdraw',[uid]],'g2-buyd':['buyDiamond',[UI._g2q?.d||1]],'g2-buyt':['buyTicket',[UI._g2q?.t||1]],'g-pull':['gacha',[el.dataset.k,+el.dataset.n]],'g-mc':['gacha',['mc',+el.dataset.n]],stablebuy:['buyStable',[+el.dataset.i]],mbuy:['marketBuy',[uid]],msell:['marketSell',[uid]],siegebuy:['siegeBuy',[el.dataset.k]]};
+    if(a==='challenge'||a==='chal-yes'){const rival=a==='challenge'?s.rivals.find(r=>r.name===el.dataset.n):UI._chal;if(!rival?.oid&&!rival?.id){UI.toast('ไม่พบกิลด์ออนไลน์คู่ต่อสู้','bad');return;}UI.closeModal();S.goSiege({rival,size:P.size||15,type:P.type||'ranked',stake:Math.max(1000,+document.getElementById('gstake')?.value||P.stake||1000)});return;}
+    if(a==='askwipe')return act(el,e);
+    if(a==='wipe'){const slot=S.activeSlot(),character=charId();NET.request({t:'online_character_delete',character}).then(()=>{SW.active=SW.ready=false;wanted=official=null;W.mode=W.map=W.player=null;S.save=null;UI._slAsk=slot;act({dataset:{act:'sl-delyes'}},e);UI.closePanel();}).catch(error=>UI.toast(error.message,'bad'));return;}
+    if(a==='gm'||a?.startsWith('gm')||a==='sl-delyes'){UI.toast('คำสั่งนี้ใช้ไม่ได้กับตัวละครออนไลน์','bad');return;}
+    const direct={runepage:['page',[+el.dataset.i]],setpet:['pet',[el.dataset.k||null]],setmount:['mount',[el.dataset.k||null]],pk:['pk',[!s.pk]],'x-lock':['lock',[uid,!UI.findItem(uid)?.lock]],'vl-buy':['vaultBuy',[]],'vl-put':['vaultDeposit',[uid]],'vl-take':['vaultWithdraw',[uid]],'g-pull':['gacha',[el.dataset.k,+el.dataset.n]],'g-mc':['gacha',['mc',+el.dataset.n]],stablebuy:['buyStable',[+el.dataset.i]],mbuy:['marketBuy',[uid]],msell:['marketSell',[uid]],siegebuy:['siegeBuy',[el.dataset.k]]};
     if(a==='vl-putall'||a==='vl-takeall'){const items=a==='vl-putall'?s.inv.filter(it=>!it.lock):(s.vault?.items||[]).slice(0,Math.max(0,S.invMax-s.inv.length));for(const item of items)command(a==='vl-putall'?'vaultDeposit':'vaultWithdraw',[item.uid]);return;}
     if(direct[a]){command(...direct[a]);return;}
-    if(['x-sellsel','x-sellall','x-autosell','sellall'].includes(a)){const selected=s.inv.filter(it=>!it.lock&&(a==='x-sellall'||a==='x-autosell'||a==='sellall'?a!=='sellall'||it.tier<=2:(s.settings.sellT||[]).includes(it.tier)&&(s.settings.sellK||[]).includes(it.kind)));command('sellMany',[selected.map(it=>it.uid)]);return;}
+    const qty=id=>Math.max(1,Math.min(9999,Math.floor(+document.getElementById(id)?.value||1)));
+    const operations={equip:['equip',[uid]],'x-equip':['equip',[el.dataset.uid]],unequip:['unequip',[el.dataset.slot]],sell:['sell',[uid]],salvage:['salvage',[uid]],sort:['sort',[]],settitle:['title',[el.dataset.t||null]],ret:['returnScroll',[]],'jb-buy':['buyStarter',[el.dataset.w,P.wg||0]],'junk-sell':['sellJunk',[]],hire:['hireContract',[el.dataset.c,el.dataset.t]],mpadd:['mercPreset',['add',P.pi||0,el.dataset.c]],mpdel:['mercPreset',['remove',P.pi||0,+el.dataset.i]],mpclear:['mercPreset',['clear',P.pi||0]],'x-auto':['autoEquip',[]],'cs-auto':['wearSet',['cs_'+s.cls]],'cs-wear':['wearSet',[el.dataset.k]],'cs-swapwear':['swapWearSet',[el.dataset.k]],'fp-open':['openPack',[el.dataset.uid]],'fp-sell':['fashionMany',['sell',[el.dataset.uid]]],'fp-drop':['fashionMany',['drop',[el.dataset.uid]]],'f2-best':['fashionBest',[]],'f2-wear':['fashionEquip',[el.dataset.uid]],fashremove:['fashionRemove',[el.dataset.slot]],'fs-wear':['fashionWearTheme',[+el.dataset.v]],craftf:['craftFashion',[]],enchant:['enchant',[uid,false]],enchantp:['enchant',[uid,true]],refine:['refine',[uid]],reforge:['reforge',[uid,+el.dataset.i]],'fg-drill':['drillSocket',[uid]],'fg-main':['rerollMain',[uid]],'rr-use':['rerollOptions',[uid,false]],'rr-buy':['rerollOptions',[uid,true]],'g2-buyd':['buyDiamond',[qty('g2qd')]],'g2-buyt':['buyTicket',[qty('g2qt')]]};
+    if(a==='cmd'){send({t:'online_action',action:'order',command:el.dataset.k,point:S.IN.lastClickW,target:W.player.target?._worldId});return;}
+    if(operations[a]){command(...operations[a]);if(['equip','unequip','sell','salvage','fp-open','fp-sell','fp-drop'].includes(a))P.sel=null;if(['fp-open','fp-sell','fp-drop'].includes(a))UI.closeModal();return;}
+    if(['fp-sellsel','fp-dropsel','fp-sellall-ok'].includes(a)){const equipped=new Set(Object.values(s.fashion.eq).filter(Boolean).map(it=>it.uid));const ids=a==='fp-sellall-ok'?s.fashion.owned.filter(it=>!equipped.has(it.uid)&&!it.lock&&(!P.fcat||P.fcat==='all'||it.slot===P.fcat)).map(it=>it.uid):(P.fpick||[]).slice();command('fashionMany',[a==='fp-dropsel'?'drop':'sell',ids]);P.fpick=[];UI.closeModal();return;}
+    if(a==='sellall'){command('sellMany',[s.inv.filter(it=>!it.lock&&S.isEquip(it)&&it.tier<=2).map(it=>it.uid)]);return;}
+
     const result=act(el,e);if(a?.startsWith('set')||a==='x-autot'||a?.startsWith('so-'))command('settings',[s.settings]);return result;};
   setInterval(poll,500);
 })(window.G);

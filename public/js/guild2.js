@@ -1,3 +1,4 @@
+(function(init){(globalThis.ASHFALL_SIM_FACTORIES ||= {})['guild2']=init;if(typeof window!=='undefined')init(window.G);})(function(G){const document=G.headless?G.platform.document:globalThis.document;
 'use strict';
 /* Bot guilds (GM managed), guild leaderboard, guild win/season rewards, Boss Clash loot for human party members */
 (function (G) {
@@ -17,15 +18,15 @@
   ];
   const BOT_TAGS = ['Iron', 'Crimson', 'Azure', 'Shadow', 'Golden', 'Storm', 'Ember', 'Frost', 'Void', 'Silver', 'Dawn', 'Night', 'Thunder', 'Jade', 'Obsidian', 'Phoenix', 'Dragon', 'Wolf', 'Raven', 'Lion'];
   const BOT_NOUNS = ['Legion', 'Order', 'Covenant', 'Vanguard', 'Brotherhood', 'Syndicate', 'Dominion', 'Knights', 'Clan', 'Alliance', 'Pact', 'Host'];
-  const loadCfg = () => { const s = S.save; if (!s) return; s.gmCfg = s.gmCfg || {}; if (s.gmCfg.bossRates) Object.assign(D.BOSS_CLASH_RATES, s.gmCfg.bossRates); if (s.gmCfg.guildWin) Object.assign(D.GUILD_WIN_REWARD, s.gmCfg.guildWin); };
+  const loadCfg = () => {if(G.SHARED_WORLD?.active){if(W.gm.guildWin)Object.assign(D.GUILD_WIN_REWARD,W.gm.guildWin);if(W.gm.bossRates)Object.assign(D.BOSS_CLASH_RATES,W.gm.bossRates);return;}const s = S.save; if (!s) return; s.gmCfg = s.gmCfg || {}; if (s.gmCfg.bossRates) Object.assign(D.BOSS_CLASH_RATES, s.gmCfg.bossRates); if (s.gmCfg.guildWin) Object.assign(D.GUILD_WIN_REWARD, s.gmCfg.guildWin); };
   const saveCfg = () => { const s = S.save; s.gmCfg = s.gmCfg || {}; s.gmCfg.bossRates = Object.assign({}, D.BOSS_CLASH_RATES); s.gmCfg.guildWin = Object.assign({}, D.GUILD_WIN_REWARD); S.persist(); };
 
   // normalize rivals into full bot guilds
-  S.normRival = (r) => { if (r._n) return r; r._n = 1; r.bot = true; r.members = r.members || U.ri(12, 30); r.avgLv = r.avgLv || U.clamp(Math.round(40 + (r.rating - 800) / 12 + U.ri(-10, 10)), 1, D.MAX_LV); r.wins = r.wins || 0; r.losses = r.losses || 0; r.leader = r.leader || U.pick(D.NAMES) + U.ri(1, 99); r.cp = r.cp || Math.round(r.avgLv * r.avgLv * 9 + r.rating * 40); return r; };
+  S.normRival = (r) => { if(r.id&&!r.bot){const members=Array.isArray(r.members)?r.members:[],avgLv=members.length?Math.round(members.reduce((n,m)=>n+(m.lvl||1),0)/members.length):1;return {...r,_n:1,bot:false,members:members.length,avgLv,leader:members.find(m=>m.pid===r.leader)?.name||r.leader||'-',cp:r.cp||Math.round(avgLv*avgLv*9+r.rating*40)};}if (r._n) return r; r._n = 1; r.bot = true; r.members = r.members || U.ri(12, 30); r.avgLv = r.avgLv || U.clamp(Math.round(40 + (r.rating - 800) / 12 + U.ri(-10, 10)), 1, D.MAX_LV); r.wins = r.wins || 0; r.losses = r.losses || 0; r.leader = r.leader || U.pick(D.NAMES) + U.ri(1, 99); r.cp = r.cp || Math.round(r.avgLv * r.avgLv * 9 + r.rating * 40); return r; };
   S.makeBotGuild = (o = {}) => { const name = o.name || `${U.pick(BOT_TAGS)} ${U.pick(BOT_NOUNS)}`; const tag = (o.tag || name.split(' ').map(w => w[0]).join('') + U.ri(1, 9)).toUpperCase().slice(0, 4); return S.normRival({ name, tag, rating: o.rating ?? U.ri(800, 2200), members: o.members, avgLv: o.avgLv, gm: true }); };
   S.leaderboard = () => {
-    const s = S.save; (s.rivals || []).forEach(S.normRival);
-    const list = (s.rivals || []).map(r => ({ name: r.name, tag: r.tag, rating: r.rating, me: false, wins: r.wins, losses: r.losses, members: r.members, avgLv: r.avgLv, cp: r.cp, leader: r.leader, bot: true }));
+    const s = S.save; const rivals = (s.rivals || []).map(S.normRival);
+    const list = rivals.map(r => ({ name: r.name, tag: r.tag, rating: r.rating, me: false, wins: r.wins, losses: r.losses, members: r.members, avgLv: r.avgLv, cp: r.cp, leader: r.leader, bot: !!r.bot }));
     if (s.guild) { const g = s.guild; list.push({ name: g.name, tag: g.tag, rating: g.rating, me: true, wins: g.wins, losses: g.losses, members: g.members.length + 1, avgLv: Math.round((g.members.reduce((a, m) => a + m.lvl, 0) + s.lvl) / (g.members.length + 1)), cp: (W.player && W.player.cpv) || 0, leader: s.name }); }
     return list.sort((a, b) => b.rating - a.rating);
   };
@@ -48,7 +49,7 @@
   S.simGuildWars = (n = 10) => { const s = S.save; const L = s.rivals; if (L.length < 2) return 0; for (let i = 0; i < n; i++) { const a = U.pick(L), b = U.pick(L.filter(x => x !== a)); S.normRival(a); S.normRival(b); const pa = 1 / (1 + Math.pow(10, (b.rating - a.rating) / 400)); const aw = Math.random() < pa * 0.7 + (a.cp > b.cp ? 0.2 : 0.05); const d = Math.round(32 * ((aw ? 1 : 0) - pa)); a.rating += d; b.rating -= d; (aw ? a : b).wins++; (aw ? b : a).losses++; } return n; };
 
   // ---------- Boss Clash loot: tier 4+ weighted, every HUMAN in the winning party, bots excluded ----------
-  S.isHuman = u => u === W.player || !!u.human;
+  S.isHuman = u => u === W.player || !!u.human || !!u.pid;
   S.rollBossTier = () => { const R = D.BOSS_CLASH_RATES; const tot = Object.values(R).reduce((a, b) => a + b, 0); let x = Math.random() * tot; for (const [t, w] of Object.entries(R)) { x -= w; if (x <= 0) return +t; } return 4; };
   S.bossClashLoot = (m, w) => {
     if (!m.md || m.md.id !== 'boss' || !m.boss || !m.boss.dead || (w !== 0 && w !== 1)) return null;
@@ -58,6 +59,7 @@
     if (out.items.length) G.UI.feed(`ของจากบอสแจกให้ผู้เล่นในปาร์ตี้ที่ชนะ ${humans.length} คน (บอท ${bots} ตัวไม่ได้รับ)`, 'gold', true);
     return out;
   };
+  if(G.headless)return;
   const pvpRes0 = UI.pvpResult;
   UI.pvpResult = (m, w, r) => {
     pvpRes0(m, w, r); const bl = r.bossLoot; const box = $('#mbody'); if (!box || !m.md || m.md.id !== 'boss') return;
@@ -136,6 +138,8 @@
     return gmC0(c, el);
   };
   const sg0 = UI.siegeResult; UI.siegeResult = (m, res) => { sg0(m, res); const b = res.bonus, box = $('#mbody'); if (!b || !box) return; const h = `<h4>รางวัลชนะศึกกิลด์</h4><p>ทอง +${U.fmt(b.gold)} · แต้มสงคราม +${b.war} · EXP กิลด์ +${b.xp}</p><div class="igrid">${b.items.map(it => UI.itemCell(it, 'noop')).join('')}</div>`; const list = box.querySelector('.list'); if (list) list.insertAdjacentHTML('beforebegin', h); else box.insertAdjacentHTML('beforeend', h); };
-  document.addEventListener('change', e => { const t = e.target; if (t.classList && t.classList.contains('mlv') && S.save.guild) { const m = S.save.guild.members[+t.dataset.i]; if (m) { m.lvl = U.clamp(+t.value || 1, 1, D.MAX_LV); S.persist(); } } });
+  document.addEventListener('change', e => { const t = e.target; if (t.classList && t.classList.contains('mlv') && S.save.guild) {if(G.SHARED_WORLD?.active){UI.renderPanel();return;} const m = S.save.guild.members[+t.dataset.i]; if (m) { m.lvl = U.clamp(+t.value || 1, 1, D.MAX_LV); S.persist(); } } });
   const enter0 = UI.onEnter; UI.onEnter = (m) => { loadCfg(); return enter0(m); };
-})(window.G);
+})(G);
+
+});

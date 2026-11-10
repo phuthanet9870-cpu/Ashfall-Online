@@ -892,7 +892,7 @@
     for (const wl of m.walls) if (U.d2(wl.x, wl.y, vx0, vy0) < R2) list.push({ d: wl.ty + 1, wl });
     for (const u of W.units) if (U.d2(u.x, u.y, vx0, vy0) < R2) list.push({ d: u.y + (u.dead ? -0.3 : 0), u });
     for (const l of W.loots) if (U.d2(l.x, l.y, vx0, vy0) < R2) list.push({ d: l.y - 0.1, l });
-    if (W.pet && W.pet.spr) list.push({ d: W.pet.y, pet: W.pet });
+    if (W.pet && W.pet.spr) list.push({ d: W.pet.y, pet: W.pet });for(const pet of W.onlinePets||[])if(pet.spr)list.push({d:pet.y,pet});
     list.sort((a, b) => a.d - b.d);
     for (const it of list) {
       if (it.p) { const [sx, sy] = cam.w2s(it.p.x, it.p.y); const s = it.p.spr; const pl = W.player; const fade = pl && !it.p.removed && it.p.y > pl.y + 0.15 && it.p.y - pl.y < s.h / G.TS * 0.95 && Math.abs(it.p.x - pl.x) < s.w / G.TS * 0.5 && s.h / G.TS > 1.1; if (fade) ctx.globalAlpha = 0.38; ctx.drawImage(s.img, Math.round(sx - s.w / 2), Math.round(sy - s.h + 3)); if (fade) ctx.globalAlpha = 1; }
