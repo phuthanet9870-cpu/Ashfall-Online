@@ -15,13 +15,13 @@
   const requests = new Map();
   const bus = new Map(); const emit = (t, m) => { for (const f of bus.get(t) || []) { try { f(m); } catch (e) { } } };
   const NET = window.ASHFALL_NET = { pid: PID, sessionToken: ls('ashfall_session') || '', connected: false, authed: false, error: '', url: URL_, peerPid: new Map(), on(t, f) { (bus.get(t) || bus.set(t, []).get(t)).push(f); }, send(o) { send(o); }, request(o) { return new Promise((resolve,reject)=>{const request=crypto.randomUUID();const timer=setTimeout(()=>{requests.delete(request);reject(new Error('request_timeout'));},20000);requests.set(request,{resolve,reject,timer});send({...o,request});}); } };
-  let ws = null, myId = null, retry = 1000, authStr = '', authSentAt=0;
+  let ws = null, myId = null, retry = 1000, authStr = '', authSentAt=0, authRetryAt=0;
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
-  const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut) return;if(NET.authPending){if(Date.now()-authSentAt<5000)return;NET.authPending=false;authStr='';} if (NET.sessionToken) { if (NET.authed && !force) return; NET.authPending=true;authSentAt=Date.now();send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; NET.authPending=true;authSentAt=Date.now();send(a); };
+  const auth = (force) => { const S = window.G && window.G.S; const s = S && S.save; if (!NET.connected || NET.signedOut || !force&&Date.now()<authRetryAt) return;if(NET.authPending){if(Date.now()-authSentAt<5000)return;NET.authPending=false;authStr='';} if (NET.sessionToken) { if (NET.authed && !force) return; NET.authPending=true;authSentAt=Date.now();send({t:'account_resume',token:NET.sessionToken}); return; } const profile=s||{name:'ผู้เล่น',cls:'blademaster',lvl:1}; const a = { t: 'auth', pid: PID, key: KEY, name: String(profile.name || '').slice(0, 20), cls: profile.cls, lv: profile.lvl | 0 }; const str = JSON.stringify(a); if (!force && str === authStr) return; authStr = str; NET.authPending=true;authSentAt=Date.now();send(a); };
   NET.enterGuest=async()=>{
     if(NET.sessionToken||NET.signedOut)await NET.request({t:'account_logout'});
     if(NET.authed)return;
-    await new Promise((resolve,reject)=>{let finished=false;const timer=setTimeout(()=>{finished=true;NET.authPending=false;authStr='';reject(new Error(NET.error||'auth_timeout'));},20000);NET.on('me',()=>{if(finished)return;finished=true;clearTimeout(timer);resolve();});authStr='';auth(true);});
+    await new Promise((resolve,reject)=>{let finished=false;const timer=setTimeout(()=>{finished=true;NET.authPending=false;authStr='';reject(new Error(NET.error||'auth_timeout'));},20000);NET.on('me',()=>{if(finished)return;finished=true;clearTimeout(timer);resolve();});NET.on('auth_error',m=>{if(finished)return;finished=true;clearTimeout(timer);reject(new Error(m.message));});authStr='';auth(true);});
   };
   setInterval(() => auth(false), 2000);
   const makeRoom = () => {
@@ -39,14 +39,14 @@
         if (m.t === 'kicked') { NET.authPending=false;NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');emit('login_required',m); }
         if(m.t==='online_error'&&['session_expired','invalid_session'].includes(m.error)){NET.authPending=false;NET.authed=false;NET.signedOut=true;NET.sessionToken='';ls('ashfall_session','');emit('login_required',m);}
         if (m.t === 'hi') { myId = m.id; NET.features = m.features || {}; return; }
-        if (m.t === 'me') { NET.authPending=false;NET.authed = true; }
+        if (m.t === 'me') { authRetryAt=0;NET.error='';NET.authPending=false;NET.authed = true; }
         if(m.t==='auth_fail'){
           NET.authPending=false;NET.authed=false;authStr='';
           // A guest identity can remain in browser storage after it was linked to an account.
           // Never reuse an account-locked guest key or pretend its lobby socket is authenticated.
           if(!NET.sessionToken&&['account_login_required','key','bad id'].includes(m.why)){
             PID=NET.pid=guestPID=rnd(8);KEY=rnd(16);ls('ashfall_pid',PID);ls('ashfall_key',KEY);auth(true);
-          }else NET.error='ยืนยันตัวตนไม่สำเร็จ: '+m.why;
+          }else{NET.error=String(m.detail||'').includes('Exceeded allowed rows written')?'เซิร์ฟเวอร์บันทึกข้อมูลไม่ได้ชั่วคราว กรุณาลองภายหลัง':'ยืนยันตัวตนไม่สำเร็จ: '+m.why;authRetryAt=Date.now()+60000;emit('auth_error',{message:NET.error});}
         }
         if(m.t==='online_error'&&m.error==='auth_required'&&!NET.signedOut){
           NET.authed=false;NET.authPending=false;authStr='';emit('auth_lost',m);auth(true);

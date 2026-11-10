@@ -68,7 +68,7 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
   const gIndex = async () => { if (!gidx) gidx = (await storage.get('gidx')) || []; return gidx; };
   const send = (c, o) => { try { c.sock.send(typeof o === 'string' ? o : JSON.stringify(o)); } catch (e) { } };
   const farm = createFarmService({ storage, send });
-  const authority = createOnlineService({ storage, send, allowLegacyImport, playerCap: roomCap, profileChanged: (id,save) => { getP(id).then(p=>{if(p){p.name=cleanName(save.name);p.cls=save.cls;p.lv=save.lvl;return putP(p);}}).catch(e=>console.error('Profile update:',e.message)); }, identityChanged: (c,oldId,newId) => { if(oldId&&online.get(oldId)===c)online.delete(oldId); if(newId){const previous=online.get(newId);if(previous&&previous!==c){send(previous,{t:'kicked',why:'login_elsewhere'});previous.pid=null;previous.sock.close();}online.set(newId,c);} }, guildChanged: (id,next) => { const g=gcache.get(id); if(g)Object.assign(g,next); } });
+  const authority = createOnlineService({ storage, send, allowLegacyImport, playerCap: roomCap, profileChanged: (id,save) => { getP(id).then(p=>{if(p&&(p.name!==cleanName(save.name)||p.cls!==save.cls||p.lv!==save.lvl)){p.name=cleanName(save.name);p.cls=save.cls;p.lv=save.lvl;return putP(p);}}).catch(e=>console.error('Profile update:',e.message)); }, identityChanged: (c,oldId,newId) => { if(oldId&&online.get(oldId)===c)online.delete(oldId); if(newId){const previous=online.get(newId);if(previous&&previous!==c){send(previous,{t:'kicked',why:'login_elsewhere'});previous.pid=null;previous.sock.close();}online.set(newId,c);} }, guildChanged: (id,next) => { const g=gcache.get(id); if(g)Object.assign(g,next); } });
   const toPid = (pid, o) => { const c = online.get(pid); if (c) send(c, o); };
   const card = (r) => r ? { pid: r.pid, name: r.name, cls: r.cls, lv: r.lv } : null;
   // ---------- rooms ----------
@@ -95,8 +95,9 @@ export function createCore({ storage, hash, roomCap = 60, lobbyPer = 200, maxFri
     rp(c, m) { const room = cleanRoom(m.room); const ch = c.rooms.get(room); if (!ch) return; const d = sanitize(m.d); const s = JSON.stringify(d); if (s === c.rps.get(room)) return; c.rps.set(room, s); c.rp.set(room, d); ch.dirty.add(c); },
     async auth(c, m) { const pid = String(m.pid || ''); const key = String(m.key || ''); if (!PID.test(pid) || key.length < 16) return send(c, { t: 'auth_fail', why: 'bad id' });
       if(await storage.get('account-locked:'+pid))return send(c,{t:'auth_fail',why:'account_login_required'});const kh = await hash(key); let r = await getP(pid); if (r && r.kh !== kh) return send(c, { t: 'auth_fail', why: 'key' });
+      const name=cleanName(m.name)||'ผู้เล่น',cls=clamp(m.cls,20),lv=Math.max(1,Math.min(999,m.lv|0)),changed=!r||r.name!==name||r.cls!==cls||r.lv!==lv;
       if (!r) r = { pid, kh, friends: [], inc: [], guild: null, created: Date.now() };
-      r.name = cleanName(m.name) || 'ผู้เล่น'; r.cls = clamp(m.cls, 20); r.lv = Math.max(1, Math.min(999, m.lv | 0)); r.last = Date.now(); await putP(r);
+      if(changed||c.pid!==pid){r.name=name;r.cls=cls;r.lv=lv;r.last=Date.now();await putP(r);}
       const first = c.pid !== pid; if (c.pid && c.pid !== pid && online.get(c.pid) === c) online.delete(c.pid); c.pid = pid; const prev = online.get(pid); if (prev && prev !== c) { send(prev, { t: 'kicked', why: 'login elsewhere' }); prev.pid = null; } online.set(pid, c);
       send(c, { t: 'me', pid });
       if (first) { send(c, await friendList(r));

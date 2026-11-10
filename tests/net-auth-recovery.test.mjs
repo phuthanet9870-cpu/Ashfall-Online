@@ -40,3 +40,6 @@ test('lost initial authentication reply retries instead of keeping authPending f
 test('guest auth timeout allows the next click to send a fresh authentication request',async()=>{
  const f=fixture(),failed=assert.rejects(f.net.enterGuest(),/auth_timeout/);f.timeouts.at(-1)();await failed;assert.equal(f.net.authPending,false);const next=f.net.enterGuest();assert.equal(f.socket.sent.filter(m=>m.t==='auth').length,2);f.socket.receive({t:'me'});await next;assert.equal(f.net.authed,true);
 });
+test('database quota rejection immediately reports unavailability and backs off automatic retries',async()=>{
+ const f=fixture(),failed=assert.rejects(f.net.enterGuest(),/เซิร์ฟเวอร์บันทึกข้อมูลไม่ได้/);f.socket.receive({t:'auth_fail',why:'server_error',detail:'Exceeded allowed rows written in Durable Objects free tier.'});await failed;const before=f.socket.sent.length;f.advance(5000);for(const tick of f.timers)tick();assert.equal(f.socket.sent.length,before);const manual=f.net.enterGuest();assert.equal(f.socket.sent.at(-1).t,'auth');f.socket.receive({t:'me'});await manual;assert.equal(f.net.error,'');
+});
